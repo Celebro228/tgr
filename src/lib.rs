@@ -1,9 +1,9 @@
-use macroquad::{input::*, prelude::*};
+use macroquad::{input::*, miniquad::TextureParams, prelude::*};
 use std::collections::HashMap;
 
 pub const WHITE1: Color = color_u8!(236, 236, 236, 255);
 pub const WHITE2: Color = color_u8!(204, 204, 204, 255);
-pub const BLACK1: Color = color_u8!(18, 18, 18, 255);
+pub const BLACK1: Color = color_u8!(24, 24, 24, 255);
 pub const BLACK2: Color = color_u8!(31, 31, 31, 255);
 
 pub struct D2 {
@@ -145,6 +145,16 @@ impl D2 {
                                 },
                             );
                         }
+                        GOType::Texture(t, w, h) => {
+                            draw_texture_ex(t, 
+                                self.x((obj.x + ((w / 2.) * obj.sx)) - (w / 2.)),
+                                self.y((obj.y + ((h / 2.) * obj.sy)) - (h / 2.)),
+                                obj.color,
+                                DrawTextureParams {
+                                    dest_size: Some(Vec2 { x: self.s(*w), y: self.s(*h) }),
+                                    ..Default::default()
+                                });
+                        }
                     }
                 }
             }
@@ -154,6 +164,7 @@ impl D2 {
     pub fn is_touch_pressed(&self, name: &str) -> Option<Vec2> {
         for (_, (obj_name, position, phase)) in &self.touched {
             if obj_name == name && *phase == TouchPhase::Started {
+                println!("preess {}", obj_name);
                 return Some(*position);
             }
         }
@@ -232,6 +243,10 @@ impl D2 {
                             let c = get_text_center(&t, f.as_ref(), self.s(*s) as u16, 1.0, 0.0);
                             (x - (self.x(obj.x) + (c.x * obj.sx))).abs() < c.x.abs()
                                 && (y - (self.y(obj.y) + (c.y * obj.sy))).abs() < c.y.abs()
+                        }
+                        GOType::Texture(t, w, h) => {
+                            (x - self.x(obj.x + ((w / 2.) * obj.sx))).abs() < self.s(w / 2.)
+                                && (y - self.y(obj.y + ((h / 2.) * obj.sy))).abs() < self.s(h / 2.)
                         }
                     } {
                         self.touched
@@ -312,6 +327,7 @@ pub enum GOType {
     Rect(f32, f32),
     RoundedRect(f32, f32, f32),
     Text(String, Option<Font>, f32),
+    Texture(Texture2D, f32, f32),
 }
 
 #[inline(always)]
