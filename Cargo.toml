@@ -1,0 +1,15 @@
+[package]
+name = "tgr"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0" # Укажи лицензию (важно!)
+description = "Игровой движок на Rust"
+repository = "https://github.com/ArgusDev/tge"
+documentation = "https://docs.rs/tge"
+readme = "README.md"
+keywords = ["game-engine", "rust", "3d", "graphics"]
+categories = ["game-development", "graphics", "rendering"]
+authors = ["Argus <твоя почта>"]
+
+[dependencies]
+macroquad = "0.4.14"
