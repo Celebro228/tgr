@@ -2,9 +2,9 @@
 name = "tgr"
 version = "0.1.0"
 edition = "2021"
-license = "MIT OR Apache-2.0" # Укажи лицензию (важно!)
+license = "MIT OR Apache-2.0"
 description = "Игровой движок на Rust"
-repository = "https://github.com/ArgusDev/tge"
+repository = "https://github.com/Celebro228/tgr"
 documentation = "https://docs.rs/tge"
 readme = "README.md"
 keywords = ["game-engine", "rust", "3d", "graphics"]
