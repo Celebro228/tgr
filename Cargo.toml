@@ -5,11 +5,10 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Игровой движок на Rust"
 repository = "https://github.com/Celebro228/tgr"
-documentation = "https://docs.rs/tge"
 readme = "README.md"
 keywords = ["game-engine", "rust", "3d", "graphics"]
 categories = ["game-development", "graphics", "rendering"]
-authors = ["Argus <твоя почта>"]
+authors = ["Argus"]
 
 [dependencies]
 macroquad = "0.4.14"
