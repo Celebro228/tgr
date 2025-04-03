@@ -14,11 +14,6 @@ authors = ["Argus"]
 [dependencies]
 macroquad = "0.4.14"
 
-[features]
-default = ["macroquad"] # По умолчанию будет Macroquad
-macroquad = ["dep:macroquad"]
-wgpu = ["dep:wgpu"]
-
 [[bin]]
 name = "test"
 path = "test/test.rs"
