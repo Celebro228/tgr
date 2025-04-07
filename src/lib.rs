@@ -1,23 +1,16 @@
-pub mod color;
-pub mod draw;
+// Engine
+pub mod engine;
 pub mod object;
-pub mod prelude;
+pub mod physic;
 pub mod render;
 
-pub use macroquad::main;
+// Option
+pub mod info;
 
-use macroquad::window::Conf;
-use draw::{window_h, window_w};
+/*
 
-pub fn tgr_conf() -> Conf {
-    Conf {
-        window_title: "TGR".to_string(),
-        window_width: window_w() as i32,
-        window_height: window_h() as i32,
-        high_dpi: true,
-        fullscreen: false,
-        sample_count: 1,
-        window_resizable: true,
-        ..Default::default()
-    }
-}
+ЗАДАЧИ НА СЕГОДНЯ:
+добавить хотяб одну фигуру*
+многопоточность*
+
+*/
