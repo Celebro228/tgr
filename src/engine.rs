@@ -44,6 +44,14 @@ impl Engine {
         }
     }
 
+    pub(crate) fn draw2d() {
+        unsafe {
+            if let Some(node) = &mut NODE2D {
+                node.draw();
+            }
+        }
+    }
+
     pub fn node2d(self, node: Node2d) -> Self {
         unsafe {
             NODE2D = Some(node);

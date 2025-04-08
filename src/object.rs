@@ -12,7 +12,7 @@ pub fn start_all() {
 
 pub use glam::{vec2, Vec2};
 
-use crate::engine::get_delta;
+use crate::engine::{draw2d, get_delta};
 
 pub trait Module: Sync {
     fn start(&self, obj: &mut Node2d) {}
@@ -34,6 +34,7 @@ pub struct Node2d {
     pub position: Vec2,
     pub rotation: f32,
     pub scale: Vec2,
+    pub visible: bool,
     pub node: Vec<Node2d>,
     pub script: Option<&'static dyn Module>,
 }
@@ -48,6 +49,7 @@ impl Node2d {
             position: Vec2::new(0., 0.),
             rotation: 0.,
             scale: Vec2::new(1., 1.),
+            visible: true,
             node: Vec::new(),
             script: None,
         }
@@ -119,6 +121,14 @@ impl Node2d {
         for obj in &mut self.node {
             obj.parent_position = self.global_position;
             obj.update();
+        }
+    }
+
+    pub(crate) fn draw(&mut self) {
+        draw2d(self.global_position, &self.obj);
+
+        for obj in &mut self.node {
+            obj.draw();
         }
     }
 }
