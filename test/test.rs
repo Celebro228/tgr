@@ -5,6 +5,13 @@ struct P;
 impl Module for P {
     fn start(&self, obj: &mut Node2d) {
         println!("ook!");
+        //obj.set_camera();
+    }
+
+    fn touch(&self, obj: &mut Node2d, id: u64, touch: &Touch, pos: Vec2) {
+        if let Down = touch {
+            println!("touch!")
+        }
     }
 }
 
@@ -16,6 +23,9 @@ impl Module for C {
     }
 
     fn update(&self, obj: &mut Node2d, d: f64) {
+        let p = 10000. * d as f32;
+        set_camera(get_camera().x + p, get_camera().y);
+        //set_window(100., 100.);
         //obj.position.x += 1.;
     }
 }
@@ -34,13 +44,20 @@ impl Module for SCENE {
 
 fn main() {
     let o = String::from("ok");
-    let mut s = node2d![rect("rect", 100., 100.)
-        .position(100., 100.)
+    let mut s = node2d![rect("rect", get_canvas().x, get_canvas().y)
+        //.scale(2., 1.)
+        //.position(100., 100.)
+        .color(rgb(247, 0, 0))
         .script(&C)
         .node(vec![rect("rect", 100., 100.)
             .position(200., 0.)
-            //visible(false)
-            .node(vec![circle(&o, 50.).position(0., -200.).script(&P)])]),];
+            .visible(true)
+            .color(rgb(170, 255, 0))
+            .node(vec![circle(&o, 100.)
+                .position(0., -200.)
+                .script(&P)
+                .color(rgb(51, 0, 255))
+                .scale(3., 1.)])])];
 
     Engine
         .script(&P)
@@ -48,7 +65,9 @@ fn main() {
         .fullscreen(false)
         .window(1280., 720.)
         //.canvas(1000, 1000)
-        //.view(Scale, Out)
-        //.mouse(View)
+        .view(KeepHeight, KeepHeight)
+        .camera(100., 0.)
+        .zoom(2.)
+        //.mouse(KEEP_IN, SCALE)
         .start("Title");
 }

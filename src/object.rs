@@ -1,23 +1,33 @@
-/*use inventory;
-
-pub use tgr_macro::module;
-
-inventory::collect!(&'static dyn Module);
-
-pub fn start_all() {
-    for module in inventory::iter::<&'static dyn Module> {
-        module.start();
-    }
-}*/
+use crate::engine::{draw2d, get_delta, set_add_buffer};
 
 pub use glam::{vec2, Vec2};
 
-use crate::engine::{draw2d, get_delta};
+pub struct Rgba {
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+}
 
-pub trait Module: Sync {
-    fn start(&self, obj: &mut Node2d) {}
-    fn update(&self, obj: &mut Node2d, d: f64) {}
-    fn input(&self) {}
+impl Rgba {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self {
+            r: r as f32 / 255.,
+            g: g as f32 / 255.,
+            b: b as f32 / 255.,
+            a: a as f32 / 255.,
+        }
+    }
+
+    pub fn get(&self) -> [f32; 4] {
+        [self.r, self.g, self.b, self.a]
+    }
+}
+
+pub enum Touch {
+    Down,
+    Up,
+    Moved,
 }
 
 pub enum Obj2d {
@@ -34,8 +44,9 @@ pub struct Node2d {
     pub position: Vec2,
     pub rotation: f32,
     pub scale: Vec2,
+    pub color: Rgba,
     pub visible: bool,
-    pub node: Vec<Node2d>,
+    pub(crate) node: Vec<Node2d>,
     pub script: Option<&'static dyn Module>,
 }
 
@@ -49,6 +60,7 @@ impl Node2d {
             position: Vec2::new(0., 0.),
             rotation: 0.,
             scale: Vec2::new(1., 1.),
+            color: rgb(255, 255, 255),
             visible: true,
             node: Vec::new(),
             script: None,
@@ -80,6 +92,16 @@ impl Node2d {
         self
     }
 
+    pub fn color(mut self, color: Rgba) -> Self {
+        self.color = color;
+        self
+    }
+
+    pub fn visible(mut self, sel: bool) -> Self {
+        self.visible = sel;
+        self
+    }
+
     pub fn set_global_position(&mut self, x: f32, y: f32) {
         self.position = vec2(x, y) - self.parent_position;
     }
@@ -96,6 +118,11 @@ impl Node2d {
             }
         }
         None
+    }
+
+    pub fn add_node(&mut self, node: Vec<Node2d>) {
+        self.node.extend(node);
+        set_add_buffer();
     }
 
     pub fn start(&mut self) {
@@ -125,10 +152,66 @@ impl Node2d {
     }
 
     pub(crate) fn draw(&mut self) {
-        draw2d(self.global_position, &self.obj);
+        if self.visible {
+            draw2d(
+                self.global_position,
+                &self.obj,
+                self.scale,
+                self.color.get(),
+            );
+        }
 
         for obj in &mut self.node {
             obj.draw();
+        }
+    }
+
+    pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
+        if let Some(s) = self.script {
+            s.touch(self, id, touch, pos);
+        } else {
+            for obj in &mut self.node {
+                obj.touch(id, touch, pos);
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub fn rgb(r: u8, g: u8, b: u8) -> Rgba {
+    Rgba {
+        r: r as f32 / 255.,
+        g: g as f32 / 255.,
+        b: b as f32 / 255.,
+        a: 1.,
+    }
+}
+#[inline(always)]
+pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Rgba {
+    Rgba {
+        r: r as f32 / 255.,
+        g: g as f32 / 255.,
+        b: b as f32 / 255.,
+        a: a as f32 / 255.,
+    }
+}
+
+#[inline(always)]
+pub fn circle(name: &str, r: f32) -> Node2d {
+    Node2d::new(name, Obj2d::Circle(r))
+}
+
+#[inline(always)]
+pub fn rect(name: &str, w: f32, h: f32) -> Node2d {
+    Node2d::new(name, Obj2d::Rect(w, h))
+}
+
+pub trait Module: Sync {
+    fn start(&self, obj: &mut Node2d) {}
+    fn update(&self, obj: &mut Node2d, d: f64) {}
+    fn touch(&self, obj: &mut Node2d, id: u64, touch: &Touch, pos: Vec2) {
+        for obj in &mut obj.node {
+            obj.touch(id, touch, pos);
         }
     }
 }
@@ -143,12 +226,14 @@ macro_rules! node2d {
     };
 }
 
-#[inline(always)]
-pub fn circle(name: &str, r: f32) -> Node2d {
-    Node2d::new(name, Obj2d::Circle(r))
-}
+/*use inventory;
 
-#[inline(always)]
-pub fn rect(name: &str, w: f32, h: f32) -> Node2d {
-    Node2d::new(name, Obj2d::Rect(w, h))
-}
+pub use tgr_macro::module;
+
+inventory::collect!(&'static dyn Module);
+
+pub fn start_all() {
+    for module in inventory::iter::<&'static dyn Module> {
+        module.start();
+    }
+}*/

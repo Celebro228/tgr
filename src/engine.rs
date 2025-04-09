@@ -1,15 +1,24 @@
-use crate::node2d;
+pub use crate::info;
 pub use crate::object::*;
 pub use crate::physic::*;
 pub use crate::render::*;
 
-pub use crate::info;
+pub use Touch::*;
+pub use View::*;
 
 static mut WINDOW: Vec2 = Vec2::new(1280., 720.);
 static mut WINDOW_UPDATE: bool = false;
 
 static mut CANVAS: Vec2 = Vec2::new(1280., 720.);
 static mut CANVAS_UPDATE: bool = false;
+
+static mut VIEW_WIDTH: View = View::KeepHeight;
+static mut VIEW_HEIGHT: View = View::KeepWidth;
+
+static mut ADD_BUFFER: bool = true;
+
+static mut CAMERA: Vec2 = Vec2::new(0., 0.);
+static mut ZOOM: f32 = 1.;
 
 static mut RESIZABLE: bool = true;
 static mut FULLSCREEN: bool = false;
@@ -20,6 +29,12 @@ static mut NODE2D: Option<Node2d> = None;
 
 static mut DELTA: f64 = 0.;
 static mut LAST_FRAME_TIME: f64 = 0.;
+
+pub enum View {
+    KeepWidth,
+    KeepHeight,
+    Scale,
+}
 
 pub struct Engine;
 
@@ -100,6 +115,24 @@ impl Engine {
         }
         self
     }
+
+    pub fn view(self, width: View, height: View) -> Self {
+        unsafe {
+            VIEW_WIDTH = width;
+            VIEW_HEIGHT = height;
+        }
+        self
+    }
+
+    pub fn camera(self, x: f32, y: f32) -> Self {
+        set_camera(x, y);
+        self
+    }
+
+    pub fn zoom(self, n: f32) -> Self {
+        set_zoom(n);
+        self
+    }
 }
 
 #[inline(always)]
@@ -107,7 +140,7 @@ pub fn get_window() -> Vec2 {
     unsafe { WINDOW }
 }
 #[inline(always)]
-pub fn get_window_update() -> bool {
+pub(crate) fn get_window_update() -> bool {
     unsafe {
         if WINDOW_UPDATE == true {
             WINDOW_UPDATE = false;
@@ -133,6 +166,52 @@ pub(crate) fn set_window_2(x: f32, y: f32) {
 #[inline(always)]
 pub fn get_canvas() -> Vec2 {
     unsafe { CANVAS }
+}
+#[inline(always)]
+pub fn get_view_width() -> &'static View {
+    unsafe { &VIEW_WIDTH }
+}
+#[inline(always)]
+pub fn get_view_height() -> &'static View {
+    unsafe { &VIEW_HEIGHT }
+}
+#[inline(always)]
+pub(crate) fn set_add_buffer() {
+    unsafe {
+        ADD_BUFFER = true;
+    }
+}
+#[inline(always)]
+pub(crate) fn get_add_buffer() -> bool {
+    unsafe {
+        if ADD_BUFFER {
+            ADD_BUFFER = false;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[inline(always)]
+pub fn get_camera() -> Vec2 {
+    unsafe { CAMERA }
+}
+#[inline(always)]
+pub fn set_camera(x: f32, y: f32) {
+    unsafe {
+        CAMERA = vec2(x, y);
+    }
+}
+#[inline(always)]
+pub fn get_zoom() -> f32 {
+    unsafe { ZOOM }
+}
+#[inline(always)]
+pub fn set_zoom(n: f32) {
+    unsafe {
+        ZOOM = n;
+    }
 }
 
 #[inline(always)]
