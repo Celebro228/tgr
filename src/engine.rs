@@ -1,3 +1,5 @@
+use std::vec;
+
 pub use crate::info;
 pub use crate::object::*;
 pub use crate::physic::*;
@@ -29,6 +31,11 @@ static mut NODE2D: Option<Node2d> = None;
 
 static mut DELTA: f64 = 0.;
 static mut LAST_FRAME_TIME: f64 = 0.;
+
+static mut MOUSE: Vec2 = Vec2::new(0., 0.);
+static mut MOUSE_DELTA: Vec2 = Vec2::new(0., 0.);
+
+static mut TOUCH: bool = false;
 
 pub enum View {
     KeepWidth,
@@ -63,6 +70,15 @@ impl Engine {
         unsafe {
             if let Some(node) = &mut NODE2D {
                 node.draw();
+            }
+        }
+    }
+
+    pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
+        unsafe {
+            if let Some(node) = &mut NODE2D {
+                set_touch(true);
+                node.touch(id, touch, pos);
             }
         }
     }
@@ -168,6 +184,24 @@ pub fn get_canvas() -> Vec2 {
     unsafe { CANVAS }
 }
 #[inline(always)]
+pub fn set_canvas(x: f32, y: f32) {
+    unsafe {
+        CANVAS = vec2(x, y);
+        CANVAS_UPDATE = true;
+    }
+}
+#[inline(always)]
+pub(crate) fn get_canvas_update() -> bool {
+    unsafe {
+        if CANVAS_UPDATE == true {
+            CANVAS_UPDATE = false;
+            true
+        } else {
+            false
+        }
+    }
+}
+#[inline(always)]
 pub fn get_view_width() -> &'static View {
     unsafe { &VIEW_WIDTH }
 }
@@ -225,6 +259,39 @@ pub fn get_fullscreen() -> bool {
 #[inline(always)]
 pub fn get_high_dpi() -> bool {
     unsafe { HIGH_DPI }
+}
+
+#[inline(always)]
+pub fn get_mouse() -> Vec2 {
+    unsafe { MOUSE }
+}
+#[inline(always)]
+pub(crate) fn set_mouse(x: f32, y: f32) {
+    unsafe {
+        MOUSE = vec2(x, y);
+    }
+}
+
+#[inline(always)]
+pub fn get_mouse_d() -> Vec2 {
+    unsafe { MOUSE_DELTA }
+}
+#[inline(always)]
+pub(crate) fn set_mouse_d(x: f32, y: f32) {
+    unsafe {
+        MOUSE_DELTA = vec2(x, y);
+    }
+}
+
+#[inline(always)]
+pub(crate) fn get_touch() -> bool {
+    unsafe { TOUCH }
+}
+#[inline(always)]
+pub(crate) fn set_touch(sel: bool) {
+    unsafe {
+        TOUCH = sel;
+    }
 }
 
 #[inline(always)]

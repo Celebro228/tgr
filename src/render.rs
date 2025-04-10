@@ -1,10 +1,12 @@
 use crate::{
     engine::{
-        get_add_buffer, get_camera, get_canvas, get_fullscreen, get_high_dpi, get_last_frame_time,
-        get_view_height, get_view_width, get_window, get_window_resizable, get_window_update,
-        get_zoom, set_delta, set_last_frame_time, set_window_2, Engine, Obj2d, View,
+        get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fullscreen, get_high_dpi,
+        get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable,
+        get_window_update, get_zoom, set_delta, set_last_frame_time, set_mouse, set_mouse_d,
+        set_window_2, Engine, Obj2d, View,
     },
     info::DEVICE,
+    object::Touch,
 };
 use glam::{mat4, vec2, Mat4, Vec2, Vec3};
 use miniquad::{window::set_window_size, *};
@@ -13,6 +15,8 @@ static mut VERTICES: Vec<Vertex> = Vec::new();
 static mut INDICES: Vec<u16> = Vec::new();
 static mut INDICES_LEN: i32 = 0;
 static mut INDEX_OFFSET: u16 = 0;
+
+static mut MOUSE_PROJ: Vec2 = Vec2::new(0., 0.);
 
 #[repr(C)]
 struct Vertex {
@@ -99,17 +103,11 @@ impl EventHandler for QuadRender {
         if get_window_update() {
             set_window_size(get_window().x as u32, get_window().y as u32);
             self.proj = get_proj();
+        } else if get_canvas_update() {
+            self.proj = get_proj();
         }
 
-        /*let window_half = get_window() / 2.;
-        let proj = Mat4::orthographic_rh_gl(
-            -window_half.x,
-            window_half.x,
-            -window_half.y,
-            window_half.y,
-            -1.0,
-            1.0,
-        );*/
+        set_mouse_d(0., 0.);
 
         clear2d();
         Engine::draw2d();
@@ -155,17 +153,77 @@ impl EventHandler for QuadRender {
         self.proj = get_proj();
     }
 
-    fn touch_event(&mut self, phase: TouchPhase, _id: u64, x: f32, y: f32) {}
+    fn mouse_motion_event(&mut self, x: f32, y: f32) {
+        let half_window = get_window() / 2.;
+        set_mouse(
+            (x - half_window.x) * get_mouse_proj().x,
+            (y - half_window.y) * get_mouse_proj().y,
+        );
+        Engine.touch(
+            0,
+            &Touch::Move,
+            vec2(
+                (x - half_window.x) * get_mouse_proj().x,
+                (y - half_window.y) * get_mouse_proj().y,
+            ),
+        );
+    }
 
-    fn raw_mouse_motion(&mut self, _dx: f32, _dy: f32) {}
+    fn raw_mouse_motion(&mut self, dx: f32, dy: f32) {
+        set_mouse_d(dx, dy);
+    }
+
+    fn mouse_button_down_event(&mut self, _button: MouseButton, x: f32, y: f32) {
+        let half_window = get_window() / 2.;
+        Engine.touch(
+            0,
+            &Touch::Down,
+            vec2(
+                (x - half_window.x) * get_mouse_proj().x,
+                (y - half_window.y) * get_mouse_proj().y,
+            ),
+        );
+    }
+
+    fn mouse_button_up_event(&mut self, _button: MouseButton, x: f32, y: f32) {
+        let half_window = get_window() / 2.;
+        Engine.touch(
+            0,
+            &Touch::Up,
+            vec2(
+                (x - half_window.x) * get_mouse_proj().x,
+                (y - half_window.y) * get_mouse_proj().y,
+            ),
+        );
+    }
+
+    fn touch_event(&mut self, phase: TouchPhase, id: u64, x: f32, y: f32) {
+        let half_window = get_window() / 2.;
+        match phase {
+            TouchPhase::Started => {
+                Engine.touch(id, &Touch::Down, vec2(
+                    (x - half_window.x) * get_mouse_proj().x,
+                    (y - half_window.y) * get_mouse_proj().y,
+                ));
+            }
+            TouchPhase::Ended | TouchPhase::Cancelled => {
+                Engine.touch(id, &Touch::Up, vec2(
+                    (x - half_window.x) * get_mouse_proj().x,
+                    (y - half_window.y) * get_mouse_proj().y,
+                ));
+            }
+            TouchPhase::Moved => {
+                Engine.touch(id, &Touch::Move, vec2(
+                    (x - half_window.x) * get_mouse_proj().x,
+                    (y - half_window.y) * get_mouse_proj().y,
+                ));
+            }
+        }
+    }
 
     fn mouse_wheel_event(&mut self, _x: f32, _y: f32) {}
 
-    fn mouse_button_down_event(&mut self, _button: MouseButton, _x: f32, _y: f32) {}
-
     fn key_down_event(&mut self, _keycode: KeyCode, _keymods: KeyMods, _repeat: bool) {}
-
-    fn mouse_motion_event(&mut self, _x: f32, _y: f32) {}
 }
 
 pub(crate) struct Render;
@@ -195,7 +253,8 @@ fn get_proj() -> Mat4 {
     let aspect_window = get_window().x / get_window().y;
     let aspect_canvas = get_canvas().x / get_canvas().y;
 
-    let canvas = get_canvas() / 2.;
+    let canvas = get_canvas() / 2. * get_zoom();
+    let window = get_window() / 2.;
 
     let view: &View = if aspect_window > aspect_canvas {
         get_view_width()
@@ -206,59 +265,27 @@ fn get_proj() -> Mat4 {
     match view {
         View::KeepWidth => {
             let scale = canvas.y / (aspect_window / aspect_canvas);
-            Mat4::orthographic_rh_gl(-canvas.x, canvas.x, -scale, scale, -1.0, 1.0)
+            set_mouse_proj(canvas.x / window.x, scale / window.y);
+            Mat4::orthographic_rh_gl(-canvas.x, canvas.x, scale, -scale, -1.0, 1.0)
         }
         View::KeepHeight => {
             let scale = canvas.x / (aspect_canvas / aspect_window);
-            Mat4::orthographic_rh_gl(-scale, scale, -canvas.y, canvas.y, -1.0, 1.0)
+            set_mouse_proj(scale / window.x, canvas.y / window.y);
+            Mat4::orthographic_rh_gl(-scale, scale, canvas.y, -canvas.y, -1.0, 1.0)
         }
         View::Scale => {
-            Mat4::orthographic_rh_gl(-canvas.x, canvas.x, -canvas.y, canvas.y, -1.0, 1.0)
+            set_mouse_proj(canvas.x / window.x, canvas.y / window.y);
+            Mat4::orthographic_rh_gl(-canvas.x, canvas.x, canvas.y, -canvas.y, -1.0, 1.0)
         }
-    }
-}
-
-#[inline(always)]
-fn get_vertices() -> &'static Vec<Vertex> {
-    unsafe { &VERTICES }
-}
-
-#[inline(always)]
-fn get_indices() -> &'static Vec<u16> {
-    unsafe { &INDICES }
-}
-#[inline(always)]
-fn get_indices_len() -> i32 {
-    unsafe { INDICES_LEN }
-}
-
-#[inline(always)]
-fn add_vertices(vert: Vec<Vertex>, indi: Vec<u16>) {
-    unsafe {
-        let indi: Vec<u16> = indi.iter().map(|x| x + INDEX_OFFSET).collect();
-
-        INDEX_OFFSET += vert.len() as u16;
-        VERTICES.extend(vert);
-        INDICES.extend(indi);
-        INDICES_LEN = INDICES.len() as i32;
-    }
-}
-
-pub(crate) fn clear2d() {
-    unsafe {
-        VERTICES.clear();
-        INDICES.clear();
-        INDICES_LEN = 0;
-        INDEX_OFFSET = 0;
     }
 }
 
 pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
-    let pos = (pos - get_camera()) / get_zoom();
+    let pos = pos - get_camera();
     match obj {
         Obj2d::None => {}
         Obj2d::Circle(r) => {
-            let r = r / get_zoom();
+            let r = r;
 
             let mut vertices = Vec::new();
             let mut indices = Vec::new();
@@ -287,8 +314,8 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
             add_vertices(vertices, indices);
         }
         Obj2d::Rect(w, h) => {
-            let w = (w * scale.x) / 2. / get_zoom();
-            let h = (h * scale.y) / 2. / get_zoom();
+            let w = (w * scale.x) / 2.;
+            let h = (h * scale.y) / 2.;
             add_vertices(
                 vec![
                     Vertex {
@@ -312,6 +339,52 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
             );
         }
     }
+}
+
+#[inline(always)]
+fn add_vertices(vert: Vec<Vertex>, indi: Vec<u16>) {
+    unsafe {
+        let indi: Vec<u16> = indi.iter().map(|x| x + INDEX_OFFSET).collect();
+
+        INDEX_OFFSET += vert.len() as u16;
+        VERTICES.extend(vert);
+        INDICES.extend(indi);
+        INDICES_LEN = INDICES.len() as i32;
+    }
+}
+
+pub(crate) fn clear2d() {
+    unsafe {
+        VERTICES.clear();
+        INDICES.clear();
+        INDICES_LEN = 0;
+        INDEX_OFFSET = 0;
+    }
+}
+
+#[inline(always)]
+fn get_vertices() -> &'static Vec<Vertex> {
+    unsafe { &VERTICES }
+}
+
+#[inline(always)]
+fn get_indices() -> &'static Vec<u16> {
+    unsafe { &INDICES }
+}
+#[inline(always)]
+fn get_indices_len() -> i32 {
+    unsafe { INDICES_LEN }
+}
+
+#[inline(always)]
+fn set_mouse_proj(x: f32, y: f32) {
+    unsafe {
+        MOUSE_PROJ = vec2(x, y);
+    }
+}
+#[inline(always)]
+fn get_mouse_proj() -> Vec2 {
+    unsafe { MOUSE_PROJ }
 }
 
 mod shader {

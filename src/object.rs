@@ -1,4 +1,4 @@
-use crate::engine::{draw2d, get_delta, set_add_buffer};
+use crate::engine::{draw2d, get_delta, get_touch, set_add_buffer, set_touch};
 
 pub use glam::{vec2, Vec2};
 
@@ -27,7 +27,7 @@ impl Rgba {
 pub enum Touch {
     Down,
     Up,
-    Moved,
+    Move,
 }
 
 pub enum Obj2d {
@@ -48,6 +48,7 @@ pub struct Node2d {
     pub visible: bool,
     pub(crate) node: Vec<Node2d>,
     pub script: Option<&'static dyn Module>,
+    touch_id: Option<u64>,
 }
 
 impl Node2d {
@@ -64,6 +65,7 @@ impl Node2d {
             visible: true,
             node: Vec::new(),
             script: None,
+            touch_id: None,
         }
     }
 
@@ -167,11 +169,51 @@ impl Node2d {
     }
 
     pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
-        if let Some(s) = self.script {
-            s.touch(self, id, touch, pos);
-        } else {
-            for obj in &mut self.node {
+        for obj in &mut self.node {
+            if get_touch() {
                 obj.touch(id, touch, pos);
+            } else {
+                break;
+            }
+        }
+
+        if get_touch() {
+            if let Some(s) = self.script {
+                if match touch {
+                    Touch::Down => {
+                        if match self.obj {
+                            Obj2d::Rect(w, h) => {
+                                ((pos.x - self.global_position.x).abs()) / self.scale.x
+                                    < w / 2.
+                                    && ((pos.y - self.global_position.y).abs()) / self.scale.y
+                                        < h / 2.
+                            }
+                            Obj2d::Circle(r) => {
+                                ((((pos.x - self.global_position.x).abs()) / self.scale.x).powi(2)
+                                    + (((pos.y - self.global_position.y).abs()) / self.scale.y).powi(2))
+                                        .sqrt() < r
+                            }
+                            Obj2d::None => {true}
+                        } {
+                            self.touch_id = Some(id);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Touch::Up => {
+                        if self.touch_id == Some(id) {
+                            self.touch_id = None;
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Touch::Move => self.touch_id == Some(id),
+                } {
+                    set_touch(false);
+                    s.touch(self, id, touch, pos);
+                }
             }
         }
     }
@@ -210,9 +252,7 @@ pub trait Module: Sync {
     fn start(&self, obj: &mut Node2d) {}
     fn update(&self, obj: &mut Node2d, d: f64) {}
     fn touch(&self, obj: &mut Node2d, id: u64, touch: &Touch, pos: Vec2) {
-        for obj in &mut obj.node {
-            obj.touch(id, touch, pos);
-        }
+        set_touch(true);
     }
 }
 
