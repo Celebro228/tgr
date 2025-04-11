@@ -1,3 +1,5 @@
+use std::vec;
+
 use crate::{
     engine::{
         get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fullscreen, get_high_dpi,
@@ -10,11 +12,12 @@ use crate::{
 };
 use glam::{mat4, vec2, Mat4, Vec2, Vec3};
 use miniquad::{window::set_window_size, *};
+use image::GenericImageView;
 
-static mut VERTICES: Vec<Vertex> = Vec::new();
-static mut INDICES: Vec<u16> = Vec::new();
-static mut INDICES_LEN: i32 = 0;
-static mut INDEX_OFFSET: u16 = 0;
+static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> = Vec::new();
+static mut TEXUTRES: Vec<TextureId> = Vec::new();
+static mut TEXUTRES_ID: usize = 0;
+static mut TEXUTRES_BUFFER: Vec<(Vec<u8>, u16, u16)> = Vec::new();
 
 static mut MOUSE_PROJ: Vec2 = Vec2::new(0., 0.);
 
@@ -22,13 +25,15 @@ static mut MOUSE_PROJ: Vec2 = Vec2::new(0., 0.);
 struct Vertex {
     pos: Vec2,
     color: [f32; 4],
+    uv: Vec2,
 }
 
 struct QuadRender {
     pipeline: Pipeline,
-    bindings: Bindings,
+    bindings: Vec<Bindings>,
     ctx: Box<dyn RenderingBackend>,
     proj: Mat4,
+    white: TextureId,
 }
 impl QuadRender {
     pub fn new() -> Self {
@@ -41,7 +46,7 @@ impl QuadRender {
 
         let proj = get_proj();
 
-        let vertex_buffer = ctx.new_buffer(
+        /*let vertex_buffer = ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Dynamic,
             BufferSource::slice(get_vertices()),
@@ -57,7 +62,9 @@ impl QuadRender {
             vertex_buffers: vec![vertex_buffer],
             index_buffer: index_buffer,
             images: vec![],
-        };
+        };*/
+
+        let white = ctx.new_texture_from_rgba8(1, 1, &[0xFF, 0xFF, 0xFF, 0xFF]);
 
         let shader = ctx
             .new_shader(
@@ -79,6 +86,7 @@ impl QuadRender {
             &[
                 VertexAttribute::new("in_pos", VertexFormat::Float2),
                 VertexAttribute::new("in_color", VertexFormat::Float4),
+                VertexAttribute::new("in_uv", VertexFormat::Float2),
             ],
             shader,
             PipelineParams::default(),
@@ -88,9 +96,10 @@ impl QuadRender {
 
         Self {
             pipeline,
-            bindings,
+            bindings: Vec::new(),
             ctx,
             proj,
+            white,
         }
     }
 }
@@ -109,38 +118,74 @@ impl EventHandler for QuadRender {
 
         set_mouse_d(0., 0.);
 
-        clear2d();
+        clear_render();
         Engine::draw2d();
 
         if get_add_buffer() {
-            self.bindings.vertex_buffers[0] = self.ctx.new_buffer(
-                BufferType::VertexBuffer,
-                BufferUsage::Dynamic,
-                BufferSource::slice(get_vertices()),
-            );
-            self.bindings.index_buffer = self.ctx.new_buffer(
-                BufferType::IndexBuffer,
-                BufferUsage::Dynamic,
-                BufferSource::slice(get_indices()),
-            );
+            let o = get_render().len() - self.bindings.len();
+
+            self.bindings.clear();
+
+            unsafe {
+                for i in &TEXUTRES_BUFFER {
+                    TEXUTRES.push(self.ctx.new_texture_from_rgba8(i.1, i.2, &i.0));
+                }
+                TEXUTRES_BUFFER.clear();
+            }
+
+            for i in get_render() {
+                let vertex_buffer = self.ctx.new_buffer(
+                    BufferType::VertexBuffer,
+                    BufferUsage::Dynamic,
+                    BufferSource::slice(&i.0),
+                );
+        
+                let index_buffer = self.ctx.new_buffer(
+                    BufferType::IndexBuffer,
+                    BufferUsage::Dynamic,
+                    BufferSource::slice(&i.1),
+                );
+
+                let images = if let Some(id) = i.2 {
+                    unsafe {
+                        TEXUTRES[id]
+                    }
+                } else {
+                    self.white
+                };
+        
+                let bindings = Bindings {
+                    vertex_buffers: vec![vertex_buffer],
+                    index_buffer,
+                    images: vec![images],
+                };
+
+                self.bindings.push(bindings);
+            }
         } else {
-            self.ctx.buffer_update(
-                self.bindings.vertex_buffers[0],
-                BufferSource::slice(get_vertices()),
-            );
-            self.ctx.buffer_update(
-                self.bindings.index_buffer,
-                BufferSource::slice(get_indices()),
-            );
+            for i in get_render().iter().enumerate() {
+                self.ctx.buffer_update(
+                    self.bindings[i.0].vertex_buffers[0],
+                    BufferSource::slice(&i.1.0),
+                );
+                self.ctx.buffer_update(
+                    self.bindings[i.0].index_buffer,
+                    BufferSource::slice(&i.1.1),
+                );
+            }
         }
 
         self.ctx.begin_default_pass(Default::default());
 
         self.ctx.apply_pipeline(&self.pipeline);
-        self.ctx.apply_bindings(&self.bindings);
         self.ctx
             .apply_uniforms(UniformsSource::table(&shader::Uniforms { mvp: self.proj }));
-        self.ctx.draw(0, get_indices_len(), 1);
+
+        for i in get_render().iter().enumerate() {
+            self.ctx.apply_bindings(&self.bindings[i.0]);
+            self.ctx.draw(0, i.1.1.len() as i32, 1);
+        }
+        
         self.ctx.end_render_pass();
         self.ctx.commit_frame();
 
@@ -295,6 +340,7 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
             vertices.push(Vertex {
                 pos: vec2(pos.x, pos.y),
                 color: color,
+                uv: Vec2::new(0., 0.),
             });
 
             for i in 0..=segments {
@@ -304,6 +350,7 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
                 vertices.push(Vertex {
                     pos: vec2(x, y),
                     color: color,
+                    uv: Vec2::new(0., 0.),
                 });
             }
 
@@ -311,69 +358,112 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
                 indices.extend_from_slice(&[0, i as u16, (i + 1) as u16]);
             }
 
-            add_vertices(vertices, indices);
+            add_render(vertices, indices, None);
         }
         Obj2d::Rect(w, h) => {
             let w = (w * scale.x) / 2.;
             let h = (h * scale.y) / 2.;
-            add_vertices(
+            add_render(
                 vec![
                     Vertex {
                         pos: vec2(pos.x - w, pos.y - h),
                         color: color,
+                        uv: Vec2::new(0., 0.),
                     },
                     Vertex {
                         pos: vec2(pos.x + w, pos.y - h),
                         color: color,
+                        uv: Vec2::new(0., 0.),
                     },
                     Vertex {
                         pos: vec2(pos.x + w, pos.y + h),
                         color: color,
+                        uv: Vec2::new(0., 0.),
                     },
                     Vertex {
                         pos: vec2(pos.x - w, pos.y + h),
                         color: color,
+                        uv: Vec2::new(0., 0.),
                     },
                 ],
                 vec![0, 1, 3, 1, 2, 3],
+                None
+            );
+        }
+        Obj2d::Texture(img, w, h) => {
+            let w2 = (*w as f32 * scale.x) / 2.;
+            let h2 = (*h as f32 * scale.y) / 2.;
+            add_render(
+                vec![
+                    Vertex {
+                        pos: vec2(pos.x - w2, pos.y - h2),
+                        color: color,
+                        uv: vec2(0., 0.),
+                    },
+                    Vertex {
+                        pos: vec2(pos.x + w2, pos.y - h2),
+                        color: color,
+                        uv: vec2(1., 0.),
+                    },
+                    Vertex {
+                        pos: vec2(pos.x + w2, pos.y + h2),
+                        color: color,
+                        uv: vec2(1., 1.),
+                    },
+                    Vertex {
+                        pos: vec2(pos.x - w2, pos.y + h2),
+                        color: color,
+                        uv: vec2(0., 1.),
+                    },
+                ],
+                vec![0, 1, 3, 1, 2, 3],
+                Some(*img),
             );
         }
     }
 }
 
 #[inline(always)]
-fn add_vertices(vert: Vec<Vertex>, indi: Vec<u16>) {
+fn add_render(vert: Vec<Vertex>, indi: Vec<u16>, img: Option<usize>) {
     unsafe {
-        let indi: Vec<u16> = indi.iter().map(|x| x + INDEX_OFFSET).collect();
-
-        INDEX_OFFSET += vert.len() as u16;
-        VERTICES.extend(vert);
-        INDICES.extend(indi);
-        INDICES_LEN = INDICES.len() as i32;
+        RENDERS.push((vert, indi, img));
     }
 }
 
-pub(crate) fn clear2d() {
+pub(crate) fn clear_render() {
     unsafe {
-        VERTICES.clear();
-        INDICES.clear();
-        INDICES_LEN = 0;
-        INDEX_OFFSET = 0;
+        RENDERS.clear();
     }
 }
 
 #[inline(always)]
-fn get_vertices() -> &'static Vec<Vertex> {
-    unsafe { &VERTICES }
+fn get_render() -> &'static Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> {
+    unsafe { &RENDERS }
 }
 
 #[inline(always)]
-fn get_indices() -> &'static Vec<u16> {
-    unsafe { &INDICES }
+pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
+    let img = image::open(path).expect("Error to load texture");
+
+    let rgba = img.to_rgba8().to_vec();
+    let (width, height) = img.dimensions();
+
+    unsafe {
+        TEXUTRES_BUFFER.push((rgba, width as u16, height as u16));
+        TEXUTRES_ID += 1;
+        (TEXUTRES_ID - 1, width as f32, height as f32)
+    }
 }
+
+pub(crate) fn clear_texture() {
+    unsafe {
+        TEXUTRES.clear();
+    }
+}
+
 #[inline(always)]
-fn get_indices_len() -> i32 {
-    unsafe { INDICES_LEN }
+fn get_texture(id: usize) -> &'static TextureId {
+    unsafe { &TEXUTRES[id] }
 }
 
 #[inline(always)]
@@ -393,21 +483,27 @@ mod shader {
     pub const VERTEX: &str = r#"#version 100
     attribute vec2 in_pos;
     attribute vec4 in_color;
+    attribute vec2 in_uv;
 
     varying lowp vec4 color;
+    varying lowp vec2 uv;
 
     uniform mat4 mvp;
 
     void main() {
         gl_Position = mvp * vec4(in_pos, 0, 1);
         color = in_color;
+        uv = in_uv;
     }"#;
 
     pub const FRAGMENT: &str = r#"#version 100
     varying lowp vec4 color;
+    varying lowp vec2 uv;
+
+    uniform sampler2D tex;
 
     void main() {
-        gl_FragColor = color;
+        gl_FragColor = texture2D(tex, uv) * color;
     }"#;
 
     pub const METAL: &str = r#"
@@ -444,7 +540,7 @@ mod shader {
 
     pub fn meta() -> ShaderMeta {
         ShaderMeta {
-            images: vec![],
+            images: vec!["tex".to_string()],
             uniforms: UniformBlockLayout {
                 uniforms: vec![UniformDesc::new("mvp", UniformType::Mat4)],
             },

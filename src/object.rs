@@ -1,4 +1,4 @@
-use crate::engine::{draw2d, get_delta, get_touch, set_add_buffer, set_touch};
+use crate::engine::{add_texture, draw2d, get_delta, get_touch, set_add_buffer, set_touch};
 
 pub use glam::{vec2, Vec2};
 
@@ -34,6 +34,7 @@ pub enum Obj2d {
     None,
     Rect(f32, f32),
     Circle(f32),
+    Texture(usize, f32, f32)
 }
 
 pub struct Node2d {
@@ -193,6 +194,12 @@ impl Node2d {
                                     + (((pos.y - self.global_position.y).abs()) / self.scale.y).powi(2))
                                         .sqrt() < r
                             }
+                            Obj2d::Texture(_, w, h) => {
+                                ((pos.x - self.global_position.x).abs()) / self.scale.x
+                                    < w / 2.
+                                    && ((pos.y - self.global_position.y).abs()) / self.scale.y
+                                        < h / 2.
+                            }
                             Obj2d::None => {true}
                         } {
                             self.touch_id = Some(id);
@@ -247,6 +254,12 @@ pub fn circle(name: &str, r: f32) -> Node2d {
 pub fn rect(name: &str, w: f32, h: f32) -> Node2d {
     Node2d::new(name, Obj2d::Rect(w, h))
 }
+
+#[inline(always)]
+pub fn image(name: &str, path: &str) -> Node2d {
+    let (id, w, h) = add_texture(path);
+    Node2d::new(name, Obj2d::Texture(id, w, h))
+} 
 
 pub trait Module: Sync {
     fn start(&self, obj: &mut Node2d) {}

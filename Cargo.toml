@@ -16,6 +16,7 @@ authors = ["Argus"]
 # tgr_macro = { path = "tgr_macro" }
 miniquad = { version = "0.4.8" }
 glam = "0.30.1"
+image = "0.25.6"
 
 [features]
 # default = ["miniquad"]

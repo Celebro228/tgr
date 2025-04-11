@@ -39,9 +39,9 @@ struct SCENE;
 impl Module for SCENE {
     fn start(&self, obj: &mut Node2d) {
         let p = get_canvas();
-        for i in 0..50000 {
+        /*for i in 0..10000 {
             obj.add_node(vec![rect(&format!("{}", i), 500., 500.)]);
-        }
+        }*/
         //set_canvas(p / 2.);
         //let m = get_window_position();
         //let mut s = obj.get_node("rect").unwrap();
@@ -66,7 +66,8 @@ fn main() {
                     .script(&P)
                     .color(rgb(51, 0, 255))
                     .scale(3., 1.)])]),
-        //image("img", "./data_store")
+        //image("img", "./test/rust.png"),
+        //image("img", "./test/python.png")
         //text("ok", "Heeloo!!!1", "./text")
     ]
     .script(&SCENE);
