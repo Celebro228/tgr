@@ -1,4 +1,4 @@
-use crate::engine::{add_texture, draw2d, get_delta, get_touch, set_add_buffer, set_touch};
+use crate::engine::{add_texture, draw2d, get_camera, get_canvas_proj, get_delta, get_touch, set_add_buffer, set_touch};
 
 pub use glam::{vec2, Vec2};
 
@@ -24,17 +24,30 @@ impl Rgba {
     }
 }
 
-pub enum Touch {
-    Down,
+pub enum Keep {
+    Canvas,
+    Center,
     Up,
+    Down,
+    Left,
+    Right,
+    LeftUp,
+    LeftDown,
+    RightUp,
+    RightDown,
+}
+
+pub enum Touch {
+    Press,
+    Relese,
     Move,
 }
 
 pub enum Obj2d {
     None,
-    Rect(f32, f32),
+    Rect(f32, f32, f32),
     Circle(f32),
-    Texture(usize, f32, f32)
+    Texture(usize, f32, f32),
 }
 
 pub struct Node2d {
@@ -46,6 +59,7 @@ pub struct Node2d {
     pub rotation: f32,
     pub scale: Vec2,
     pub color: Rgba,
+    pub keep: Keep,
     pub visible: bool,
     pub(crate) node: Vec<Node2d>,
     pub script: Option<&'static dyn Module>,
@@ -64,6 +78,7 @@ impl Node2d {
             scale: Vec2::new(1., 1.),
             color: rgb(255, 255, 255),
             visible: true,
+            keep: Keep::Canvas,
             node: Vec::new(),
             script: None,
             touch_id: None,
@@ -105,12 +120,29 @@ impl Node2d {
         self
     }
 
+    pub fn keep(mut self, keep: Keep) -> Self {
+        self.keep = keep;
+        self
+    }
+
     pub fn set_global_position(&mut self, x: f32, y: f32) {
         self.position = vec2(x, y) - self.parent_position;
     }
 
+    #[inline(always)]
     pub fn get_global_position(&mut self) -> Vec2 {
-        self.parent_position + self.position
+        match self.keep {
+            Keep::Canvas => self.parent_position + self.position,
+            Keep::Center => get_camera() + self.position,
+            Keep::Up => get_camera() + self.position + vec2(0., -get_canvas_proj().y),
+            Keep::Down => get_camera() + self.position + vec2(0., get_canvas_proj().y),
+            Keep::Left => get_camera() + self.position + vec2(-get_canvas_proj().x, 0.),
+            Keep::Right => get_camera() + self.position + vec2(get_canvas_proj().x, 0.),
+            Keep::LeftUp => get_camera() + self.position + vec2(-get_canvas_proj().x, -get_canvas_proj().y),
+            Keep::LeftDown => get_camera() + self.position + vec2(-get_canvas_proj().x, get_canvas_proj().y),
+            Keep::RightUp => get_camera() + self.position + vec2(get_canvas_proj().x, -get_canvas_proj().y),
+            Keep::RightDown => get_camera() + self.position + vec2(get_canvas_proj().x, get_canvas_proj().y),
+        }
     }
 
     pub fn get_node(&mut self, name: &str) -> Option<&mut Node2d> {
@@ -133,7 +165,7 @@ impl Node2d {
             s.start(self);
         }
 
-        self.global_position = self.parent_position + self.position;
+        self.global_position = self.get_global_position();
 
         for obj in &mut self.node {
             obj.parent_position = self.global_position;
@@ -146,7 +178,7 @@ impl Node2d {
             s.update(self, get_delta());
         }
 
-        self.global_position = self.parent_position + self.position;
+        self.global_position = self.get_global_position();
 
         for obj in &mut self.node {
             obj.parent_position = self.global_position;
@@ -181,26 +213,26 @@ impl Node2d {
         if get_touch() {
             if let Some(s) = self.script {
                 if match touch {
-                    Touch::Down => {
+                    Touch::Press => {
                         if match self.obj {
-                            Obj2d::Rect(w, h) => {
-                                ((pos.x - self.global_position.x).abs()) / self.scale.x
-                                    < w / 2.
+                            Obj2d::Rect(w, h, _) => {
+                                ((pos.x - self.global_position.x).abs()) / self.scale.x < w / 2.
                                     && ((pos.y - self.global_position.y).abs()) / self.scale.y
                                         < h / 2.
                             }
                             Obj2d::Circle(r) => {
                                 ((((pos.x - self.global_position.x).abs()) / self.scale.x).powi(2)
-                                    + (((pos.y - self.global_position.y).abs()) / self.scale.y).powi(2))
-                                        .sqrt() < r
+                                    + (((pos.y - self.global_position.y).abs()) / self.scale.y)
+                                        .powi(2))
+                                .sqrt()
+                                    < r
                             }
                             Obj2d::Texture(_, w, h) => {
-                                ((pos.x - self.global_position.x).abs()) / self.scale.x
-                                    < w / 2.
+                                ((pos.x - self.global_position.x).abs()) / self.scale.x < w / 2.
                                     && ((pos.y - self.global_position.y).abs()) / self.scale.y
                                         < h / 2.
                             }
-                            Obj2d::None => {true}
+                            Obj2d::None => true,
                         } {
                             self.touch_id = Some(id);
                             true
@@ -208,7 +240,7 @@ impl Node2d {
                             false
                         }
                     }
-                    Touch::Up => {
+                    Touch::Relese => {
                         if self.touch_id == Some(id) {
                             self.touch_id = None;
                             true
@@ -244,6 +276,30 @@ pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Rgba {
         a: a as f32 / 255.,
     }
 }
+#[inline(always)]
+pub fn hsv(h: f32, s: f32, v: f32) -> Rgba {
+    let c = v * s;
+    let h = h / 60.;
+    let x = c * (1. - ((h % 2.) - 1.).abs());
+    let m = v - s;
+
+    let (r, g, b) = match h as u32 {
+        0 => (c, x, 0.),
+        1 => (x, c, 0.),
+        2 => (0., c, x),
+        3 => (0., x, c),
+        4 => (x, 0., c),
+        5 => (c, 0., x),
+        _ => (0., 0., 0.), // fallback, например если h = NaN
+    };
+
+    Rgba {
+        r: r + m,
+        g: g + m,
+        b: b + m,
+        a: 1.,
+    }
+}
 
 #[inline(always)]
 pub fn circle(name: &str, r: f32) -> Node2d {
@@ -251,20 +307,20 @@ pub fn circle(name: &str, r: f32) -> Node2d {
 }
 
 #[inline(always)]
-pub fn rect(name: &str, w: f32, h: f32) -> Node2d {
-    Node2d::new(name, Obj2d::Rect(w, h))
+pub fn rect(name: &str, w: f32, h: f32, r: f32) -> Node2d {
+    Node2d::new(name, Obj2d::Rect(w, h, r))
 }
 
 #[inline(always)]
 pub fn image(name: &str, path: &str) -> Node2d {
     let (id, w, h) = add_texture(path);
     Node2d::new(name, Obj2d::Texture(id, w, h))
-} 
+}
 
 pub trait Module: Sync {
-    fn start(&self, obj: &mut Node2d) {}
-    fn update(&self, obj: &mut Node2d, d: f64) {}
-    fn touch(&self, obj: &mut Node2d, id: u64, touch: &Touch, pos: Vec2) {
+    fn start(&self, _obj: &mut Node2d) {}
+    fn update(&self, _obj: &mut Node2d, _d: f64) {}
+    fn touch(&self, _obj: &mut Node2d, _id: u64, _touch: &Touch, _pos: Vec2) {
         set_touch(true);
     }
 }

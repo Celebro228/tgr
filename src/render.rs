@@ -2,10 +2,7 @@ use std::vec;
 
 use crate::{
     engine::{
-        get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fullscreen, get_high_dpi,
-        get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable,
-        get_window_update, get_zoom, set_delta, set_last_frame_time, set_mouse, set_mouse_d,
-        set_window_2, Engine, Obj2d, View,
+        add_fps_buffer, get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_window_2, Engine, Obj2d, View
     },
     info::DEVICE,
     object::Touch,
@@ -19,6 +16,7 @@ static mut TEXUTRES: Vec<TextureId> = Vec::new();
 static mut TEXUTRES_ID: usize = 0;
 static mut TEXUTRES_BUFFER: Vec<(Vec<u8>, u16, u16)> = Vec::new();
 
+static mut PROJ: Mat4 = Mat4::IDENTITY;
 static mut MOUSE_PROJ: Vec2 = Vec2::new(0., 0.);
 
 #[repr(C)]
@@ -32,7 +30,6 @@ struct QuadRender {
     pipeline: Pipeline,
     bindings: Vec<Bindings>,
     ctx: Box<dyn RenderingBackend>,
-    proj: Mat4,
     white: TextureId,
 }
 impl QuadRender {
@@ -44,25 +41,7 @@ impl QuadRender {
             set_window_2(x, y);
         }
 
-        let proj = get_proj();
-
-        /*let vertex_buffer = ctx.new_buffer(
-            BufferType::VertexBuffer,
-            BufferUsage::Dynamic,
-            BufferSource::slice(get_vertices()),
-        );
-
-        let index_buffer = ctx.new_buffer(
-            BufferType::IndexBuffer,
-            BufferUsage::Dynamic,
-            BufferSource::slice(get_indices()),
-        );
-
-        let bindings = Bindings {
-            vertex_buffers: vec![vertex_buffer],
-            index_buffer: index_buffer,
-            images: vec![],
-        };*/
+        set_proj();
 
         let white = ctx.new_texture_from_rgba8(1, 1, &[0xFF, 0xFF, 0xFF, 0xFF]);
 
@@ -93,12 +72,12 @@ impl QuadRender {
         );
 
         set_last_frame_time(date::now());
+        set_last_fps_time(get_last_frame_time()+1.);
 
         Self {
             pipeline,
             bindings: Vec::new(),
             ctx,
-            proj,
             white,
         }
     }
@@ -111,9 +90,9 @@ impl EventHandler for QuadRender {
     fn draw(&mut self) {
         if get_window_update() {
             set_window_size(get_window().x as u32, get_window().y as u32);
-            self.proj = get_proj();
+            set_proj();
         } else if get_canvas_update() {
-            self.proj = get_proj();
+            set_proj();
         }
 
         set_mouse_d(0., 0.);
@@ -179,7 +158,9 @@ impl EventHandler for QuadRender {
 
         self.ctx.apply_pipeline(&self.pipeline);
         self.ctx
-            .apply_uniforms(UniformsSource::table(&shader::Uniforms { mvp: self.proj }));
+            .apply_uniforms(UniformsSource::table(&shader::Uniforms { mvp: unsafe {
+                PROJ
+            } }));
 
         for i in get_render().iter().enumerate() {
             self.ctx.apply_bindings(&self.bindings[i.0]);
@@ -191,26 +172,30 @@ impl EventHandler for QuadRender {
 
         set_delta(date::now() - get_last_frame_time());
         set_last_frame_time(date::now());
+
+        add_fps_buffer(1);
+        if get_last_fps_time() <= get_last_frame_time() {
+            set_fps(get_fps_buffer());
+            set_fps_buffer(0);
+            set_last_fps_time(get_last_frame_time()+1.);
+        }
     }
 
     fn resize_event(&mut self, width: f32, height: f32) {
         set_window_2(width, height);
-        self.proj = get_proj();
+        set_proj();
     }
 
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
-        let half_window = get_window() / 2.;
+        let mouse = get_mouse_proj(x, y);
         set_mouse(
-            (x - half_window.x) * get_mouse_proj().x,
-            (y - half_window.y) * get_mouse_proj().y,
+            mouse.x,
+            mouse.y,
         );
         Engine.touch(
             0,
             &Touch::Move,
-            vec2(
-                (x - half_window.x) * get_mouse_proj().x,
-                (y - half_window.y) * get_mouse_proj().y,
-            ),
+            vec2(mouse.x, mouse.y)
         );
     }
 
@@ -219,49 +204,31 @@ impl EventHandler for QuadRender {
     }
 
     fn mouse_button_down_event(&mut self, _button: MouseButton, x: f32, y: f32) {
-        let half_window = get_window() / 2.;
         Engine.touch(
             0,
-            &Touch::Down,
-            vec2(
-                (x - half_window.x) * get_mouse_proj().x,
-                (y - half_window.y) * get_mouse_proj().y,
-            ),
+            &Touch::Press,
+            get_mouse_proj(x, y),
         );
     }
 
     fn mouse_button_up_event(&mut self, _button: MouseButton, x: f32, y: f32) {
-        let half_window = get_window() / 2.;
         Engine.touch(
             0,
-            &Touch::Up,
-            vec2(
-                (x - half_window.x) * get_mouse_proj().x,
-                (y - half_window.y) * get_mouse_proj().y,
-            ),
+            &Touch::Relese,
+            get_mouse_proj(x, y),
         );
     }
 
     fn touch_event(&mut self, phase: TouchPhase, id: u64, x: f32, y: f32) {
-        let half_window = get_window() / 2.;
         match phase {
             TouchPhase::Started => {
-                Engine.touch(id, &Touch::Down, vec2(
-                    (x - half_window.x) * get_mouse_proj().x,
-                    (y - half_window.y) * get_mouse_proj().y,
-                ));
+                Engine.touch(id, &Touch::Press, get_mouse_proj(x, y));
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
-                Engine.touch(id, &Touch::Up, vec2(
-                    (x - half_window.x) * get_mouse_proj().x,
-                    (y - half_window.y) * get_mouse_proj().y,
-                ));
+                Engine.touch(id, &Touch::Relese, get_mouse_proj(x, y));
             }
             TouchPhase::Moved => {
-                Engine.touch(id, &Touch::Move, vec2(
-                    (x - half_window.x) * get_mouse_proj().x,
-                    (y - half_window.y) * get_mouse_proj().y,
-                ));
+                Engine.touch(id, &Touch::Move, get_mouse_proj(x, y));
             }
         }
     }
@@ -294,7 +261,7 @@ impl Render {
     }
 }
 
-fn get_proj() -> Mat4 {
+fn set_proj() {
     let aspect_window = get_window().x / get_window().y;
     let aspect_canvas = get_canvas().x / get_canvas().y;
 
@@ -307,22 +274,27 @@ fn get_proj() -> Mat4 {
         get_view_height()
     };
 
-    match view {
+    let proj = match view {
         View::KeepWidth => {
             let scale = canvas.y / (aspect_window / aspect_canvas);
             set_mouse_proj(canvas.x / window.x, scale / window.y);
+            set_canvas_proj(canvas.x, scale);
             Mat4::orthographic_rh_gl(-canvas.x, canvas.x, scale, -scale, -1.0, 1.0)
         }
         View::KeepHeight => {
             let scale = canvas.x / (aspect_canvas / aspect_window);
             set_mouse_proj(scale / window.x, canvas.y / window.y);
+            set_canvas_proj(scale, canvas.y);
             Mat4::orthographic_rh_gl(-scale, scale, canvas.y, -canvas.y, -1.0, 1.0)
         }
         View::Scale => {
             set_mouse_proj(canvas.x / window.x, canvas.y / window.y);
+            set_canvas_proj(canvas.x, canvas.y);
             Mat4::orthographic_rh_gl(-canvas.x, canvas.x, canvas.y, -canvas.y, -1.0, 1.0)
         }
-    }
+    };
+
+    unsafe { PROJ = proj }
 }
 
 pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
@@ -330,20 +302,18 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
     match obj {
         Obj2d::None => {}
         Obj2d::Circle(r) => {
-            let r = r;
+            let mut vertices: Vec<Vertex> = Vec::new();
+            let mut indices: Vec<u16> = Vec::new();
 
-            let mut vertices = Vec::new();
-            let mut indices = Vec::new();
-
-            let segments = 50;
+            let segments = 40;
 
             vertices.push(Vertex {
                 pos: vec2(pos.x, pos.y),
-                color: color,
+                color,
                 uv: Vec2::new(0., 0.),
             });
 
-            for i in 0..=segments {
+            for i in 0..segments {
                 let theta = i as f32 / segments as f32 * std::f32::consts::TAU;
                 let x = pos.x + r * theta.cos() * scale.x;
                 let y = pos.y + r * theta.sin() * scale.y;
@@ -354,17 +324,22 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
                 });
             }
 
-            for i in 1..=segments {
-                indices.extend_from_slice(&[0, i as u16, (i + 1) as u16]);
+            for i in 1..segments {
+                indices.extend([0, i as u16, (i + 1) as u16]);
             }
+            indices.extend([0, segments, 1]);
 
             add_render(vertices, indices, None);
         }
-        Obj2d::Rect(w, h) => {
+        Obj2d::Rect(w, h, r) => {
             let w = (w * scale.x) / 2.;
             let h = (h * scale.y) / 2.;
-            add_render(
-                vec![
+
+            let mut vertices: Vec<Vertex> = Vec::new();
+            let mut indices: Vec<u16> = Vec::new();
+
+            if *r <= 1. {
+                vertices.extend([
                     Vertex {
                         pos: vec2(pos.x - w, pos.y - h),
                         color: color,
@@ -385,8 +360,40 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
-                ],
-                vec![0, 1, 3, 1, 2, 3],
+                ]);
+                indices.extend(vec![0, 1, 3, 1, 2, 3]);
+            } else {
+                let segments = 40;
+
+                let corner_centers = [
+                    vec2(pos.x - w + r, pos.y - h + r), // top-left
+                    vec2(pos.x + w - r, pos.y - h + r), // top-right
+                    vec2(pos.x + w - r, pos.y + h - r), // bottom-right
+                    vec2(pos.x - w + r, pos.y + h - r), // bottom-left
+                ];
+
+                // Четверти кругов
+                for (j, dot_pos) in corner_centers.iter().enumerate() {
+                    for i in 0..segments {
+                        let theta = i as f32 / segments as f32 * std::f32::consts::TAU;
+                        let x = dot_pos.x + r * theta.cos() * scale.x;
+                        let y = dot_pos.y + r * theta.sin() * scale.y;
+                        vertices.push(Vertex {
+                            pos: vec2(x, y),
+                            color: color,
+                            uv: Vec2::new(0., 0.),
+                        });
+                    }
+        
+                    for i in 1..segments / 4 {
+                        indices.extend([0, ((j * segments / 4) + i) as u16, ((j * segments) + i + 1) as u16]);
+                    }
+                }
+            }
+
+            add_render(
+                vertices,
+                indices,
                 None
             );
         }
@@ -455,17 +462,6 @@ pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
     }
 }
 
-pub(crate) fn clear_texture() {
-    unsafe {
-        TEXUTRES.clear();
-    }
-}
-
-#[inline(always)]
-fn get_texture(id: usize) -> &'static TextureId {
-    unsafe { &TEXUTRES[id] }
-}
-
 #[inline(always)]
 fn set_mouse_proj(x: f32, y: f32) {
     unsafe {
@@ -473,8 +469,10 @@ fn set_mouse_proj(x: f32, y: f32) {
     }
 }
 #[inline(always)]
-fn get_mouse_proj() -> Vec2 {
-    unsafe { MOUSE_PROJ }
+fn get_mouse_proj(x: f32, y: f32) -> Vec2 {
+    let half_window = get_window() / 2.;
+    //y - half_window.y) * get_mouse_proj().y - get_camera().y,
+    unsafe { (vec2(x, y) - half_window) * MOUSE_PROJ + get_camera() }
 }
 
 mod shader {

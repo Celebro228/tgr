@@ -5,6 +5,7 @@ pub use crate::object::*;
 pub use crate::physic::*;
 pub use crate::render::*;
 
+pub use Keep::*;
 pub use Touch::*;
 pub use View::*;
 
@@ -13,6 +14,7 @@ static mut WINDOW_UPDATE: bool = false;
 
 static mut CANVAS: Vec2 = Vec2::new(1280., 720.);
 static mut CANVAS_UPDATE: bool = false;
+static mut CANVAS_PROJ: Vec2 = Vec2::new(1280. / 2., 720. / 2.);
 
 static mut VIEW_WIDTH: View = View::KeepHeight;
 static mut VIEW_HEIGHT: View = View::KeepWidth;
@@ -36,6 +38,10 @@ static mut MOUSE: Vec2 = Vec2::new(0., 0.);
 static mut MOUSE_DELTA: Vec2 = Vec2::new(0., 0.);
 
 static mut TOUCH: bool = false;
+
+static mut FPS: u16 = 60;
+static mut FPS_BUFFER: u16 = 0;
+static mut LAST_FPS_TIME: f64 = 0.;
 
 pub enum View {
     KeepWidth,
@@ -202,6 +208,17 @@ pub(crate) fn get_canvas_update() -> bool {
     }
 }
 #[inline(always)]
+pub(crate) fn set_canvas_proj(x: f32, y: f32) {
+    unsafe {
+        CANVAS_PROJ = vec2(x, y);
+    }
+}
+#[inline(always)]
+pub fn get_canvas_proj() -> Vec2 {
+    unsafe { CANVAS_PROJ }
+}
+
+#[inline(always)]
 pub fn get_view_width() -> &'static View {
     unsafe { &VIEW_WIDTH }
 }
@@ -235,6 +252,7 @@ pub fn get_camera() -> Vec2 {
 pub fn set_camera(x: f32, y: f32) {
     unsafe {
         CAMERA = vec2(x, y);
+        CANVAS_UPDATE = true;
     }
 }
 #[inline(always)]
@@ -245,6 +263,7 @@ pub fn get_zoom() -> f32 {
 pub fn set_zoom(n: f32) {
     unsafe {
         ZOOM = n;
+        CANVAS_UPDATE = true;
     }
 }
 
@@ -309,8 +328,45 @@ pub(crate) fn get_last_frame_time() -> f64 {
     unsafe { LAST_FRAME_TIME }
 }
 #[inline(always)]
-pub(crate) fn set_last_frame_time(last_frame_time: f64) {
+pub(crate) fn set_last_frame_time(time: f64) {
     unsafe {
-        LAST_FRAME_TIME = last_frame_time;
+        LAST_FRAME_TIME = time;
+    }
+}
+
+#[inline(always)]
+pub fn get_fps() -> u16 {
+    unsafe { FPS }
+}
+#[inline(always)]
+pub(crate) fn set_fps(fps: u16) {
+    unsafe {
+        FPS = fps;
+    }
+}
+#[inline(always)]
+pub(crate) fn get_fps_buffer() -> u16 {
+    unsafe { FPS_BUFFER }
+}
+#[inline(always)]
+pub(crate) fn set_fps_buffer(fps: u16) {
+    unsafe {
+        FPS_BUFFER = fps;
+    }
+}
+#[inline(always)]
+pub(crate) fn add_fps_buffer(fps: u16) {
+    unsafe {
+        FPS_BUFFER += fps;
+    }
+}
+#[inline(always)]
+pub(crate) fn get_last_fps_time() -> f64 {
+    unsafe { LAST_FPS_TIME }
+}
+#[inline(always)]
+pub(crate) fn set_last_fps_time(time: f64) {
+    unsafe {
+        LAST_FPS_TIME = time;
     }
 }
