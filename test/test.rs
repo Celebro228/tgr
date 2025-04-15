@@ -4,7 +4,7 @@ struct P;
 
 impl Module for P {
     fn start(&self, _obj: &mut Node2d) {
-        println!("ook!");
+        //println!("ook!");
         //obj.set_camera();
     }
 
@@ -26,7 +26,7 @@ impl Module for C {
 
     fn update(&self, _obj: &mut Node2d, d: f64) {
         let p = 100. * d as f32;
-        println!("{}", get_fps());
+        //println!("{}", get_fps());
         //println!("{} {}", get_mouse().x, get_mouse().y)
         //set_canvas(get_canvas().x + p, get_canvas().y);
         set_camera(get_camera().x + p, get_camera().y);
@@ -50,7 +50,7 @@ impl Module for SCENE {
 fn main() {
     let o = String::from("ok");
     let s = node2d![
-        image("img", "./test/rust.png"),
+        //image("img", "./test/rust.png"),
         rect("rect", 500., 500., 100.)
             .scale(2., 2.)
             .position(100., 100.)
@@ -61,11 +61,11 @@ fn main() {
                 .position(200., 0.)
                 .visible(true)
                 .color(rgb(170, 255, 0))
-                .node(vec![circle(&o, 100.)
+                .node(vec![circle(&o, 200.)
                     .position(0., -200.)
                     .script(&P)
                     .color(hsv(50., 50., 50.))
-                    .scale(3., 1.)])]),
+                    .scale(1., 1.)])]),
         //
         //image("img", "./test/python.png")
         //text("ok", "Heeloo!!!1", "./text")

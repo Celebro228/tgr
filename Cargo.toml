@@ -37,10 +37,36 @@ opt-level = 3
 lto = true
 panic = "abort"
 debug = false
-opt-level = "s"
+opt-level = 3
 overflow-checks = false
 debug-assertions = false
 incremental = false
 rpath = false
 codegen-units = 1
 strip = true
+
+[package.metadata.android.activity_attributes]
+"android:exported" =  "true"
+# "android:screenOrientation" = "userLandscape"
+
+[package.metadata.android]
+fullscreen = true
+
+# [apk.signing]
+# key_path = "debug.keystore"
+# key_alias = "androiddebugkey"
+# key_password = "android"
+# keystore_password = "android"
+# 
+# [package.metadata.android]
+# android_version = 31
+# target_sdk_version = 31
+# min_sdk_version = 31
+# build_targets = [ "armv7-linux-androideabi", "aarch64-linux-android", "i686-linux-android", "x86_64-linux-android" ]
+# package_name = "rust.celebro.test"
+# label = "CapCut"
+# version_code = 2
+# version_name = "2.0"
+# fullscreen = false
+# opengles_version_major = 3
+# opengles_version_minor = 2

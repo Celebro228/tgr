@@ -36,7 +36,7 @@ impl QuadRender {
     pub fn new() -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
-        if get_fullscreen() {
+        if get_fullscreen() || DEVICE != 0 {
             let (x, y) = window::screen_size();
             set_window_2(x, y);
         }
@@ -365,30 +365,39 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
             } else {
                 let segments = 40;
 
+                let half_segments = segments / 4;
+
                 let corner_centers = [
-                    vec2(pos.x - w + r, pos.y - h + r), // top-left
-                    vec2(pos.x + w - r, pos.y - h + r), // top-right
                     vec2(pos.x + w - r, pos.y + h - r), // bottom-right
                     vec2(pos.x - w + r, pos.y + h - r), // bottom-left
+                    vec2(pos.x - w + r, pos.y - h + r), // top-left
+                    vec2(pos.x + w - r, pos.y - h + r), // top-right
                 ];
 
-                // Четверти кругов
-                for (j, dot_pos) in corner_centers.iter().enumerate() {
-                    for i in 0..segments {
-                        let theta = i as f32 / segments as f32 * std::f32::consts::TAU;
-                        let x = dot_pos.x + r * theta.cos() * scale.x;
-                        let y = dot_pos.y + r * theta.sin() * scale.y;
+                vertices.push(Vertex {
+                    pos: vec2(pos.x, pos.y),
+                    color,
+                    uv: Vec2::new(0., 0.),
+                });
+    
+                for (corner_index, &center) in corner_centers.iter().enumerate() {
+                    for i in 0..half_segments {
+                        let theta = (corner_index * half_segments + i) as f32 / segments as f32 * std::f32::consts::TAU;
+                        let x = center.x + r * theta.cos() * scale.x;
+                        let y = center.y + r * theta.sin() * scale.y;
                         vertices.push(Vertex {
                             pos: vec2(x, y),
                             color: color,
                             uv: Vec2::new(0., 0.),
                         });
                     }
-        
-                    for i in 1..segments / 4 {
-                        indices.extend([0, ((j * segments / 4) + i) as u16, ((j * segments) + i + 1) as u16]);
-                    }
                 }
+                
+    
+                for i in 1..segments {
+                    indices.extend([0, i as u16, (i + 1) as u16]);
+                }
+                indices.extend([0, segments as u16, 1]);
             }
 
             add_render(
