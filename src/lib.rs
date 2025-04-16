@@ -8,6 +8,5 @@ pub mod render;
 pub mod info;
 
 /*
-Текст*
-Мобилка*
+Текст
 */

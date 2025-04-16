@@ -2,19 +2,22 @@ use std::vec;
 
 use crate::{
     engine::{
-        add_fps_buffer, get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_window_2, Engine, Obj2d, View
+        add_fps_buffer, get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_window_2, Engine, Obj2d, Rgba, View
     },
     info::DEVICE,
     object::Touch,
 };
 use glam::{mat4, vec2, Mat4, Vec2, Vec3};
 use miniquad::{window::set_window_size, *};
-use image::GenericImageView;
+use image::{DynamicImage, GenericImageView, ImageBuffer};
+use rusttype::{Font, Scale, point};
 
 static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> = Vec::new();
 static mut TEXUTRES: Vec<TextureId> = Vec::new();
 static mut TEXUTRES_ID: usize = 0;
 static mut TEXUTRES_BUFFER: Vec<(Vec<u8>, u16, u16)> = Vec::new();
+
+static mut FONTS: Vec<Font> = Vec::new();
 
 static mut PROJ: Mat4 = Mat4::IDENTITY;
 static mut MOUSE_PROJ: Vec2 = Vec2::new(0., 0.);
@@ -68,7 +71,14 @@ impl QuadRender {
                 VertexAttribute::new("in_uv", VertexFormat::Float2),
             ],
             shader,
-            PipelineParams::default(),
+            PipelineParams{
+                color_blend: Some(BlendState::new(Equation::Add, BlendFactor::Value(BlendValue::SourceAlpha), BlendFactor::OneMinusValue(BlendValue::SourceAlpha))),
+                alpha_blend: Some(BlendState::new(
+                    Equation::Add,
+                    BlendFactor::Zero,
+                    BlendFactor::One)),
+                ..Default::default()
+            },
         );
 
         set_last_frame_time(date::now());
@@ -406,9 +416,9 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
                 None
             );
         }
-        Obj2d::Texture(img, w, h) => {
-            let w2 = (*w as f32 * scale.x) / 2.;
-            let h2 = (*h as f32 * scale.y) / 2.;
+        Obj2d::Texture(t) => {
+            let w2 = (t.width as f32 * scale.x) / 2.;
+            let h2 = (t.height as f32 * scale.y) / 2.;
             add_render(
                 vec![
                     Vertex {
@@ -433,7 +443,7 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
                     },
                 ],
                 vec![0, 1, 3, 1, 2, 3],
-                Some(*img),
+                Some(t.id),
             );
         }
     }
@@ -458,18 +468,96 @@ fn get_render() -> &'static Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> {
 }
 
 #[inline(always)]
-pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
-    let img = image::open(path).expect("Error to load texture");
+pub(crate) fn get_font(path: &str) -> usize {
+    let file = std::fs::read(path).unwrap();
+    let file: &'static [u8] = Box::leak(file.into_boxed_slice());
+    let font = Font::try_from_bytes(&file).expect("Error font bytes");
+    
+    unsafe {
+        FONTS.push(font);
+        FONTS.len() - 1
+    }
+}
 
-    let rgba = img.to_rgba8().to_vec();
-    let (width, height) = img.dimensions();
-
+#[inline(always)]
+fn add_texture_buffer(rgba: Vec<u8>, width: u32, height: u32) -> (usize, f32, f32) {
     unsafe {
         TEXUTRES_BUFFER.push((rgba, width as u16, height as u16));
         TEXUTRES_ID += 1;
         (TEXUTRES_ID - 1, width as f32, height as f32)
     }
 }
+
+#[inline(always)]
+pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
+    let img = image::open(path).expect("Error to load texture");
+
+    let rgba = img.to_rgba8().to_vec();
+    let (width, height) = img.dimensions();
+
+    add_texture_buffer(rgba, width, height)
+
+    /*unsafe {
+        TEXUTRES_BUFFER.push((rgba, width as u16, height as u16));
+        TEXUTRES_ID += 1;
+        (TEXUTRES_ID - 1, width as f32, height as f32)
+    }*/
+}
+
+#[inline(always)]
+pub(crate) fn add_text(text: &str, size: f32, font_id: usize) -> (usize, f32, f32) {
+    let scale = Scale::uniform(size);
+
+    let font = unsafe { &FONTS[font_id] };
+
+    let v_metrics = font.v_metrics(scale);
+
+    let glyphs: Vec<_> = font
+        .layout(text, scale, point(20.0, 20.0 + v_metrics.ascent))
+        .collect();
+
+        let (min_x, max_x, min_y, max_y) = {
+            let first = glyphs.first().and_then(|g| g.pixel_bounding_box()).unwrap();
+            let last = glyphs.last().and_then(|g| g.pixel_bounding_box()).unwrap();
+    
+            let (mut min_x, mut max_x) = (first.min.x, last.max.x);
+            let (mut min_y, mut max_y) = (first.min.y, last.max.y);
+    
+            for g in &glyphs {
+                if let Some(bb) = g.pixel_bounding_box() {
+                    min_x = min_x.min(bb.min.x);
+                    max_x = max_x.max(bb.max.x);
+                    min_y = min_y.min(bb.min.y);
+                    max_y = max_y.max(bb.max.y);
+                }
+            }
+    
+            (min_x, max_x, min_y, max_y)
+        };
+    
+        let width = (max_x - min_x) as u32;
+        let height = (max_y - min_y) as u32;
+
+    let mut image = DynamicImage::new_rgba8(width, height).to_rgba8();
+
+    for glyph in glyphs {
+        if let Some(bounding_box) = glyph.pixel_bounding_box() {
+            glyph.draw(|x, y, v| {
+                if v != 0. {
+                    image.put_pixel(
+                        x + (bounding_box.min.x - min_x) as u32,
+                        y + (bounding_box.min.y - min_y) as u32,
+                        image::Rgba([255, 255, 255, (v * 255.) as u8]),
+                    )
+                }
+            });
+        }
+    }
+    image.save("image_example.png").unwrap();
+
+    add_texture_buffer(image.to_vec(), width, height)
+}
+
 
 #[inline(always)]
 fn set_mouse_proj(x: f32, y: f32) {

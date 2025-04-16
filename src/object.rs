@@ -1,12 +1,12 @@
-use crate::engine::{add_texture, draw2d, get_camera, get_canvas_proj, get_delta, get_touch, set_add_buffer, set_touch};
+use crate::engine::{add_text, add_texture, draw2d, get_camera, get_canvas_proj, get_delta, get_font, get_touch, set_add_buffer, set_touch};
 
 pub use glam::{vec2, Vec2};
 
 pub struct Rgba {
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
 }
 
 impl Rgba {
@@ -22,6 +22,22 @@ impl Rgba {
     pub fn get(&self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
+}
+
+pub struct Font {
+    pub(crate) id: usize
+}
+pub struct Texture {
+    pub(crate) id: usize,
+    pub width: f32,
+    pub height: f32,
+}
+
+pub enum Obj2d {
+    None,
+    Rect(f32, f32, f32),
+    Circle(f32),
+    Texture(Texture),
 }
 
 pub enum Keep {
@@ -41,13 +57,6 @@ pub enum Touch {
     Press,
     Relese,
     Move,
-}
-
-pub enum Obj2d {
-    None,
-    Rect(f32, f32, f32),
-    Circle(f32),
-    Texture(usize, f32, f32),
 }
 
 pub struct Node2d {
@@ -214,7 +223,7 @@ impl Node2d {
             if let Some(s) = self.script {
                 if match touch {
                     Touch::Press => {
-                        if match self.obj {
+                        if match &self.obj {
                             Obj2d::Rect(w, h, _) => {
                                 ((pos.x - self.global_position.x).abs()) / self.scale.x < w / 2.
                                     && ((pos.y - self.global_position.y).abs()) / self.scale.y
@@ -225,12 +234,12 @@ impl Node2d {
                                     + (((pos.y - self.global_position.y).abs()) / self.scale.y)
                                         .powi(2))
                                 .sqrt()
-                                    < r
+                                    < *r
                             }
-                            Obj2d::Texture(_, w, h) => {
-                                ((pos.x - self.global_position.x).abs()) / self.scale.x < w / 2.
+                            Obj2d::Texture(t) => {
+                                ((pos.x - self.global_position.x).abs()) / self.scale.x < t.width / 2.
                                     && ((pos.y - self.global_position.y).abs()) / self.scale.y
-                                        < h / 2.
+                                        < t.height / 2.
                             }
                             Obj2d::None => true,
                         } {
@@ -302,6 +311,24 @@ pub fn hsv(h: f32, s: f32, v: f32) -> Rgba {
 }
 
 #[inline(always)]
+pub fn font(path: &str) -> Font {
+    let id = get_font(path);
+    Font { id }
+}
+
+#[inline(always)]
+pub fn texture(path: &str) -> Texture {
+    let (id, w, h) = add_texture(path);
+    Texture { id, width: w, height: h }
+}
+
+#[inline(always)]
+pub fn text(text: &str, size: f32, font: &Font) -> Texture {
+    let (id, w, h) = add_text(text, size, font.id);
+    Texture { id, width: w, height: h }
+}
+
+#[inline(always)]
 pub fn circle(name: &str, r: f32) -> Node2d {
     Node2d::new(name, Obj2d::Circle(r))
 }
@@ -312,9 +339,8 @@ pub fn rect(name: &str, w: f32, h: f32, r: f32) -> Node2d {
 }
 
 #[inline(always)]
-pub fn image(name: &str, path: &str) -> Node2d {
-    let (id, w, h) = add_texture(path);
-    Node2d::new(name, Obj2d::Texture(id, w, h))
+pub fn image(name: &str, texture: &Texture) -> Node2d {
+    Node2d::new(name, Obj2d::Texture(Texture { id: texture.id, width: texture.width, height: texture.height }))
 }
 
 pub trait Module: Sync {

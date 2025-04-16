@@ -26,7 +26,7 @@ impl Module for C {
 
     fn update(&self, _obj: &mut Node2d, d: f64) {
         let p = 100. * d as f32;
-        //println!("{}", get_fps());
+        println!("{}", get_fps());
         //println!("{} {}", get_mouse().x, get_mouse().y)
         //set_canvas(get_canvas().x + p, get_canvas().y);
         set_camera(get_camera().x + p, get_camera().y);
@@ -48,9 +48,10 @@ impl Module for SCENE {
 }
 
 fn main() {
+
     let o = String::from("ok");
     let s = node2d![
-        //image("img", "./test/rust.png"),
+        //image("img", &texture("./image_example.png")),
         rect("rect", 500., 500., 100.)
             .scale(2., 2.)
             .position(100., 100.)
@@ -65,7 +66,10 @@ fn main() {
                     .position(0., -200.)
                     .script(&P)
                     .color(hsv(50., 50., 50.))
+                    .color(rgba(255, 255, 255, 100))
                     .scale(1., 1.)])]),
+        image("img", &text("Привет, пупсик", 500., &font("./test/calibri.ttf")))
+            .position(300., 0.),
         //
         //image("img", "./test/python.png")
         //text("ok", "Heeloo!!!1", "./text")
@@ -83,5 +87,7 @@ fn main() {
         .zoom(2.)
         //.mouse(KEEP_IN)
         //.touch_in_mouse(false)
+        //.backgraund()
+        //.font()
         .start("Title");
 }
