@@ -1,13 +1,15 @@
-use std::vec;
-
 pub use crate::info;
 pub use crate::object::*;
 pub use crate::physic::*;
 pub use crate::render::*;
+pub use crate::audio::*;
+pub use crate::data::*;
 
 pub use Keep::*;
 pub use Touch::*;
 pub use View::*;
+
+//pub const BLACK1: Rgba = Rgba::new(0.09, 0.99, 0.09, 1.0);
 
 static mut WINDOW: Vec2 = Vec2::new(1280., 720.);
 static mut WINDOW_UPDATE: bool = false;
@@ -21,6 +23,7 @@ static mut VIEW_HEIGHT: View = View::KeepWidth;
 
 static mut ADD_BUFFER: bool = true;
 
+//static mut BACKGRAUND: Rgba = BLACK1;
 static mut CAMERA: Vec2 = Vec2::new(0., 0.);
 static mut ZOOM: f32 = 1.;
 
@@ -59,6 +62,7 @@ impl Engine {
             }
         }
 
+        //AudioModule::start();
         Render::start(name);
 
         self
@@ -244,6 +248,16 @@ pub(crate) fn get_add_buffer() -> bool {
     }
 }
 
+/*#[inline(always)]
+pub fn get_backgraund() -> &'static Rgba {
+    unsafe { &BACKGRAUND }
+}
+#[inline(always)]
+pub fn set_backgraund(color: Rgba) {
+    unsafe {
+        BACKGRAUND = color;
+    }
+}*/
 #[inline(always)]
 pub fn get_camera() -> Vec2 {
     unsafe { CAMERA }

@@ -10,7 +10,7 @@ use crate::{
 use glam::{mat4, vec2, Mat4, Vec2, Vec3};
 use miniquad::{window::set_window_size, *};
 use image::{DynamicImage, GenericImageView, ImageBuffer};
-use rusttype::{Font, Scale, point};
+use rusttype::{point, Font, Point, Scale};
 
 static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> = Vec::new();
 static mut TEXUTRES: Vec<TextureId> = Vec::new();
@@ -111,8 +111,6 @@ impl EventHandler for QuadRender {
         Engine::draw2d();
 
         if get_add_buffer() {
-            let o = get_render().len() - self.bindings.len();
-
             self.bindings.clear();
 
             unsafe {
@@ -164,6 +162,9 @@ impl EventHandler for QuadRender {
             }
         }
 
+        //let backgraund = get_backgraund();
+
+        //self.ctx.clear(Some((backgraund.r, backgraund.g, backgraund.b, backgraund.a)), None, None);
         self.ctx.begin_default_pass(Default::default());
 
         self.ctx.apply_pipeline(&self.pipeline);
@@ -243,8 +244,6 @@ impl EventHandler for QuadRender {
         }
     }
 
-    fn mouse_wheel_event(&mut self, _x: f32, _y: f32) {}
-
     fn key_down_event(&mut self, _keycode: KeyCode, _keymods: KeyMods, _repeat: bool) {}
 }
 
@@ -307,7 +306,7 @@ fn set_proj() {
     unsafe { PROJ = proj }
 }
 
-pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
+pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: [f32; 4]) {
     let pos = pos - get_camera();
     match obj {
         Obj2d::None => {}
@@ -325,10 +324,11 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
 
             for i in 0..segments {
                 let theta = i as f32 / segments as f32 * std::f32::consts::TAU;
-                let x = pos.x + r * theta.cos() * scale.x;
-                let y = pos.y + r * theta.sin() * scale.y;
+                let x = r * theta.cos() * scale.x;
+                let y = r * theta.sin() * scale.y;
+                let p = rotate(vec2(x, y), pos, rotation);
                 vertices.push(Vertex {
-                    pos: vec2(x, y),
+                    pos: p,
                     color: color,
                     uv: Vec2::new(0., 0.),
                 });
@@ -351,22 +351,22 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
             if *r <= 1. {
                 vertices.extend([
                     Vertex {
-                        pos: vec2(pos.x - w, pos.y - h),
+                        pos: rotate(vec2(-w, -h), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
                     Vertex {
-                        pos: vec2(pos.x + w, pos.y - h),
+                        pos: rotate(vec2(w, -h), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
                     Vertex {
-                        pos: vec2(pos.x + w, pos.y + h),
+                        pos: rotate(vec2(w, h), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
                     Vertex {
-                        pos: vec2(pos.x - w, pos.y + h),
+                        pos: rotate(vec2(-w, h), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
@@ -378,10 +378,10 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
                 let half_segments = segments / 4;
 
                 let corner_centers = [
-                    vec2(pos.x + w - r, pos.y + h - r), // bottom-right
-                    vec2(pos.x - w + r, pos.y + h - r), // bottom-left
-                    vec2(pos.x - w + r, pos.y - h + r), // top-left
-                    vec2(pos.x + w - r, pos.y - h + r), // top-right
+                    vec2(w - r, h - r), // bottom-right
+                    vec2(-w + r, h - r), // bottom-left
+                    vec2(-w + r, -h + r), // top-left
+                    vec2(w - r, -h + r), // top-right
                 ];
 
                 vertices.push(Vertex {
@@ -395,8 +395,9 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
                         let theta = (corner_index * half_segments + i) as f32 / segments as f32 * std::f32::consts::TAU;
                         let x = center.x + r * theta.cos() * scale.x;
                         let y = center.y + r * theta.sin() * scale.y;
+                        let p = rotate(vec2(x, y), pos, rotation);
                         vertices.push(Vertex {
-                            pos: vec2(x, y),
+                            pos: p,
                             color: color,
                             uv: Vec2::new(0., 0.),
                         });
@@ -417,35 +418,46 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, color: [f32; 4]) {
             );
         }
         Obj2d::Texture(t) => {
-            let w2 = (t.width as f32 * scale.x) / 2.;
-            let h2 = (t.height as f32 * scale.y) / 2.;
+            let w = (t.width as f32 * scale.x) / 2.;
+            let h = (t.height as f32 * scale.y) / 2.;
             add_render(
                 vec![
                     Vertex {
-                        pos: vec2(pos.x - w2, pos.y - h2),
+                        pos: rotate(vec2(-w, -h), pos, rotation),
                         color: color,
-                        uv: vec2(0., 0.),
+                        uv: Vec2::new(0., 0.),
                     },
                     Vertex {
-                        pos: vec2(pos.x + w2, pos.y - h2),
+                        pos: rotate(vec2(w, -h), pos, rotation),
                         color: color,
-                        uv: vec2(1., 0.),
+                        uv: Vec2::new(1., 0.),
                     },
                     Vertex {
-                        pos: vec2(pos.x + w2, pos.y + h2),
+                        pos: rotate(vec2(w, h), pos, rotation),
                         color: color,
-                        uv: vec2(1., 1.),
+                        uv: Vec2::new(1., 1.),
                     },
                     Vertex {
-                        pos: vec2(pos.x - w2, pos.y + h2),
+                        pos: rotate(vec2(-w, h), pos, rotation),
                         color: color,
-                        uv: vec2(0., 1.),
+                        uv: Vec2::new(0., 1.),
                     },
                 ],
                 vec![0, 1, 3, 1, 2, 3],
                 Some(t.id),
             );
         }
+    }
+}
+
+#[inline(always)]
+fn rotate(p: Vec2, center: Vec2, rotation: f32) -> Vec2 {
+    if rotation != 0. {let s = rotation.sin();
+        let c = rotation.cos();
+    
+        vec2(p.x * c - p.y * s, p.x * s + p.y * c) + center
+    } else {
+        p + center
     }
 }
 
@@ -467,7 +479,6 @@ fn get_render() -> &'static Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> {
     unsafe { &RENDERS }
 }
 
-#[inline(always)]
 pub(crate) fn get_font(path: &str) -> usize {
     let file = std::fs::read(path).unwrap();
     let file: &'static [u8] = Box::leak(file.into_boxed_slice());
@@ -504,7 +515,6 @@ pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
     }*/
 }
 
-#[inline(always)]
 pub(crate) fn add_text(text: &str, size: f32, font_id: usize) -> (usize, f32, f32) {
     let scale = Scale::uniform(size);
 

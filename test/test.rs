@@ -8,6 +8,10 @@ impl Module for P {
         //obj.set_camera();
     }
 
+    fn update(&self, obj: &mut Node2d, d: f64) {
+        obj.rotation += d as f32;
+    }
+
     fn touch(&self, obj: &mut Node2d, _id: u64, touch: &Touch, pos: Vec2) {
         if let Move = touch {
             obj.set_global_position(pos.x, pos.y);
@@ -19,6 +23,7 @@ struct C;
 
 impl Module for C {
     fn start(&self, _obj: &mut Node2d) {
+        get_data::<Audio>("ok").unwrap().play();
         //set_camera(100., 0.);
         //set_window(get_window().x / 2., get_window().y / 2.);
         //wait(100.);
@@ -30,6 +35,8 @@ impl Module for C {
         //println!("{} {}", get_mouse().x, get_mouse().y)
         //set_canvas(get_canvas().x + p, get_canvas().y);
         set_camera(get_camera().x + p, get_camera().y);
+
+        let num= get_data::<u8>("num").unwrap();
         //set_window(100., 100.);
         //obj.position.x += 1.;
     }
@@ -48,6 +55,8 @@ impl Module for SCENE {
 }
 
 fn main() {
+    set_data("ok", audio("./test/test.ogg"));
+    set_data("num", 0u8);
 
     let o = String::from("ok");
     let s = node2d![
@@ -55,6 +64,7 @@ fn main() {
         rect("rect", 500., 500., 100.)
             .scale(2., 2.)
             .position(100., 100.)
+            .rotation(-180.)
             .color(rgb(255, 0, 0))
             .script(&C)
             .keep(Center)
@@ -67,9 +77,11 @@ fn main() {
                     .script(&P)
                     .color(hsv(50., 50., 50.))
                     .color(rgba(255, 255, 255, 100))
-                    .scale(1., 1.)])]),
+                    .rotation(100.)
+                    .scale(2., 1.)])]),
         image("img", &text("Привет, пупсик", 500., &font("./test/calibri.ttf")))
-            .position(300., 0.),
+            .position(300., 0.)
+            .rotation(100.),
         //
         //image("img", "./test/python.png")
         //text("ok", "Heeloo!!!1", "./text")
@@ -89,5 +101,6 @@ fn main() {
         //.touch_in_mouse(false)
         //.backgraund()
         //.font()
+        //.data()
         .start("Title");
 }

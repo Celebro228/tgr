@@ -10,12 +10,12 @@ pub struct Rgba {
 }
 
 impl Rgba {
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+    pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self {
-            r: r as f32 / 255.,
-            g: g as f32 / 255.,
-            b: b as f32 / 255.,
-            a: a as f32 / 255.,
+            r,
+            g,
+            b,
+            a,
         }
     }
 
@@ -58,6 +58,8 @@ pub enum Touch {
     Relese,
     Move,
 }
+
+pub struct Key (char);
 
 pub struct Node2d {
     pub name: String,
@@ -201,6 +203,7 @@ impl Node2d {
                 self.global_position,
                 &self.obj,
                 self.scale,
+                self.rotation,
                 self.color.get(),
             );
         }
@@ -285,7 +288,7 @@ pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Rgba {
         a: a as f32 / 255.,
     }
 }
-#[inline(always)]
+
 pub fn hsv(h: f32, s: f32, v: f32) -> Rgba {
     let c = v * s;
     let h = h / 60.;
