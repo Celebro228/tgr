@@ -2,7 +2,7 @@ use std::vec;
 
 use crate::{
     engine::{
-        add_fps_buffer, get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_window_2, Engine, Obj2d, Rgba, View
+        add_fps_buffer, get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_window_2, Engine, Key, Obj2d, Rgba, View
     },
     info::DEVICE,
     object::Touch,
@@ -13,9 +13,11 @@ use image::{DynamicImage, GenericImageView, ImageBuffer};
 use rusttype::{point, Font, Point, Scale};
 
 static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> = Vec::new();
-static mut TEXUTRES: Vec<TextureId> = Vec::new();
+
+static mut TEXUTRES: Vec<Option<TextureId>> = Vec::new();
 static mut TEXUTRES_ID: usize = 0;
 static mut TEXUTRES_BUFFER: Vec<(Vec<u8>, u16, u16)> = Vec::new();
+static mut TEXUTRES_UPDATE: Vec<(usize, Vec<u8>, u16, u16)> = Vec::new();
 
 static mut FONTS: Vec<Font> = Vec::new();
 
@@ -110,14 +112,23 @@ impl EventHandler for QuadRender {
         clear_render();
         Engine::draw2d();
 
-        if get_add_buffer() {
+        /*if get_add_buffer() {
             self.bindings.clear();
 
             unsafe {
                 for i in &TEXUTRES_BUFFER {
-                    TEXUTRES.push(self.ctx.new_texture_from_rgba8(i.1, i.2, &i.0));
+                    TEXUTRES.push(Some(self.ctx.new_texture_from_rgba8(i.1, i.2, &i.0)));
                 }
+                for i in &TEXUTRES_DELETE {
+                    if let Some(tex) = TEXUTRES[*i] {
+                        self.ctx.delete_texture(tex);
+                        TEXUTRES[*i] = None
+                    }
+                }
+                println!("{:?} {:?}", TEXUTRES, TEXUTRES_DELETE);
+
                 TEXUTRES_BUFFER.clear();
+                TEXUTRES_DELETE.clear();
             }
 
             for i in get_render() {
@@ -135,7 +146,11 @@ impl EventHandler for QuadRender {
 
                 let images = if let Some(id) = i.2 {
                     unsafe {
-                        TEXUTRES[id]
+                        if let Some(tex) = TEXUTRES[id] {
+                            tex
+                        } else {
+                            self.white
+                        }
                     }
                 } else {
                     self.white
@@ -151,6 +166,70 @@ impl EventHandler for QuadRender {
             }
         } else {
             for i in get_render().iter().enumerate() {
+                self.ctx.buffer_update(
+                    self.bindings[i.0].vertex_buffers[0],
+                    BufferSource::slice(&i.1.0),
+                );
+                self.ctx.buffer_update(
+                    self.bindings[i.0].index_buffer,
+                    BufferSource::slice(&i.1.1),
+                );
+            }
+        }*/
+
+        unsafe {
+            for i in &TEXUTRES_BUFFER {
+                TEXUTRES.push(Some(self.ctx.new_texture_from_rgba8(i.1, i.2, &i.0)));
+            }
+            
+            TEXUTRES_BUFFER.clear();
+
+            for i in &TEXUTRES_UPDATE {
+                if let Some(tex) = TEXUTRES[i.0] {
+                    self.ctx.texture_update_part(tex, 0, 0, i.2 as i32, i.3 as i32, &i.1);
+                }
+            }
+            TEXUTRES_UPDATE.clear();
+        }
+
+        if get_add_buffer() {
+            self.bindings.clear();
+        }
+
+        for i in get_render().iter().enumerate() {
+            let images = if let Some(id) = i.1.2 {
+                unsafe {
+                    if let Some(tex) = TEXUTRES[id] {
+                        tex
+                    } else {
+                        self.white
+                    }
+                }
+            } else {
+                self.white
+            };
+
+            if get_add_buffer() {
+                let vertex_buffer = self.ctx.new_buffer(
+                    BufferType::VertexBuffer,
+                    BufferUsage::Dynamic,
+                    BufferSource::slice(&i.1.0),
+                );
+        
+                let index_buffer = self.ctx.new_buffer(
+                    BufferType::IndexBuffer,
+                    BufferUsage::Dynamic,
+                    BufferSource::slice(&i.1.1),
+                );
+        
+                let bindings = Bindings {
+                    vertex_buffers: vec![vertex_buffer],
+                    index_buffer,
+                    images: vec![images],
+                };
+
+                self.bindings.push(bindings);
+            } else {
                 self.ctx.buffer_update(
                     self.bindings[i.0].vertex_buffers[0],
                     BufferSource::slice(&i.1.0),
@@ -179,6 +258,7 @@ impl EventHandler for QuadRender {
         }
         
         self.ctx.end_render_pass();
+
         self.ctx.commit_frame();
 
         set_delta(date::now() - get_last_frame_time());
@@ -214,7 +294,7 @@ impl EventHandler for QuadRender {
         set_mouse_d(dx, dy);
     }
 
-    fn mouse_button_down_event(&mut self, _button: MouseButton, x: f32, y: f32) {
+    fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
         Engine.touch(
             0,
             &Touch::Press,
@@ -222,7 +302,7 @@ impl EventHandler for QuadRender {
         );
     }
 
-    fn mouse_button_up_event(&mut self, _button: MouseButton, x: f32, y: f32) {
+    fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
         Engine.touch(
             0,
             &Touch::Relese,
@@ -244,7 +324,21 @@ impl EventHandler for QuadRender {
         }
     }
 
-    fn key_down_event(&mut self, _keycode: KeyCode, _keymods: KeyMods, _repeat: bool) {}
+    fn char_event(&mut self, character: char, keymods: KeyMods, repeat: bool) {
+        if !repeat {
+            Engine.key(&Key::Char(character), keymods, &Touch::Press);
+        }
+    }
+
+    fn key_down_event(&mut self, keycode: KeyCode, keymods: KeyMods, repeat: bool) {
+        if !repeat {
+            Engine.key(&Key::Code(keycode), keymods, &Touch::Press);
+        }
+    }
+
+    fn key_up_event(&mut self, keycode: KeyCode, keymods: KeyMods) {
+        Engine.key(&Key::Code(keycode), keymods, &Touch::Relese);
+    }
 }
 
 pub(crate) struct Render;
@@ -417,7 +511,7 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
                 None
             );
         }
-        Obj2d::Texture(t) => {
+        Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
             let w = (t.width as f32 * scale.x) / 2.;
             let h = (t.height as f32 * scale.y) / 2.;
             add_render(
@@ -498,6 +592,13 @@ fn add_texture_buffer(rgba: Vec<u8>, width: u32, height: u32) -> (usize, f32, f3
         (TEXUTRES_ID - 1, width as f32, height as f32)
     }
 }
+#[inline(always)]
+fn upd_texture_buffer(id: usize, rgba: Vec<u8>, width: u32, height: u32) -> (usize, f32, f32) {
+    unsafe {
+        TEXUTRES_UPDATE.push((id, rgba, width as u16, height as u16));
+        (id, width as f32, height as f32)
+    }
+}
 
 #[inline(always)]
 pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
@@ -515,7 +616,7 @@ pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
     }*/
 }
 
-pub(crate) fn add_text(text: &str, size: f32, font_id: usize) -> (usize, f32, f32) {
+pub(crate) fn add_text(text: &str, size: f32, font_id: usize, upd: Option<usize>) -> (usize, f32, f32) {
     let scale = Scale::uniform(size);
 
     let font = unsafe { &FONTS[font_id] };
@@ -563,9 +664,12 @@ pub(crate) fn add_text(text: &str, size: f32, font_id: usize) -> (usize, f32, f3
             });
         }
     }
-    image.save("image_example.png").unwrap();
 
-    add_texture_buffer(image.to_vec(), width, height)
+    if let Some(id) = upd {
+        upd_texture_buffer(id, image.to_vec(), width, height)
+    } else {
+        add_texture_buffer(image.to_vec(), width, height)
+    }
 }
 
 

@@ -1,6 +1,7 @@
 use crate::engine::{add_text, add_texture, draw2d, get_camera, get_canvas_proj, get_delta, get_font, get_touch, set_add_buffer, set_touch};
 
 pub use glam::{vec2, Vec2};
+use miniquad::{KeyCode, KeyMods};
 
 pub struct Rgba {
     pub r: f32,
@@ -38,6 +39,23 @@ pub enum Obj2d {
     Rect(f32, f32, f32),
     Circle(f32),
     Texture(Texture),
+    Text(String, f32, usize, Texture),
+}
+
+impl Obj2d {
+    pub fn set_text(&mut self, new_text: &str) {
+        if let Obj2d::Text(text, size, id, texture) = self {
+            *text = new_text.to_string();
+
+            let (tex_id, w, h) = add_text(text, *size, *id, Some(texture.id));
+
+            texture.id = tex_id;
+            texture.width = w;
+            texture.height = h;
+        } else {
+            panic!("Not a Text object!")
+        }
+    }
 }
 
 pub enum Keep {
@@ -59,7 +77,10 @@ pub enum Touch {
     Move,
 }
 
-pub struct Key (char);
+pub enum Key {
+    Char(char),
+    Code(KeyCode),
+}
 
 pub struct Node2d {
     pub name: String,
@@ -213,6 +234,16 @@ impl Node2d {
         }
     }
 
+    pub(crate) fn key(&mut self, key: &Key, keymod: KeyMods, touch: &Touch) {
+        if let Some(s) = self.script {
+            s.key(self, &key, keymod, touch);
+        }
+
+        for obj in &mut self.node {
+            obj.key(&key, keymod, touch);
+        }
+    }
+
     pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
         for obj in &mut self.node {
             if get_touch() {
@@ -239,7 +270,7 @@ impl Node2d {
                                 .sqrt()
                                     < *r
                             }
-                            Obj2d::Texture(t) => {
+                            Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
                                 ((pos.x - self.global_position.x).abs()) / self.scale.x < t.width / 2.
                                     && ((pos.y - self.global_position.y).abs()) / self.scale.y
                                         < t.height / 2.
@@ -326,9 +357,9 @@ pub fn texture(path: &str) -> Texture {
 }
 
 #[inline(always)]
-pub fn text(text: &str, size: f32, font: &Font) -> Texture {
-    let (id, w, h) = add_text(text, size, font.id);
-    Texture { id, width: w, height: h }
+pub fn text(name: &str, text: &str, size: f32, font: &Font) -> Node2d {
+    let (id, w, h) = add_text(text, size, font.id, None);
+    Node2d::new(name, Obj2d::Text(text.to_string(), size, font.id, Texture { id, width: w, height: h }))
 }
 
 #[inline(always)]
@@ -349,6 +380,7 @@ pub fn image(name: &str, texture: &Texture) -> Node2d {
 pub trait Module: Sync {
     fn start(&self, _obj: &mut Node2d) {}
     fn update(&self, _obj: &mut Node2d, _d: f64) {}
+    fn key(&self, _obj: &mut Node2d, _key: &Key, _keymod: KeyMods, _touch: &Touch) {}
     fn touch(&self, _obj: &mut Node2d, _id: u64, _touch: &Touch, _pos: Vec2) {
         set_touch(true);
     }

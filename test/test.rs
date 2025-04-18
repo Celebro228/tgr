@@ -6,15 +6,24 @@ impl Module for P {
     fn start(&self, _obj: &mut Node2d) {
         //println!("ook!");
         //obj.set_camera();
+        //get_text("");
+        //
     }
 
     fn update(&self, obj: &mut Node2d, d: f64) {
         obj.rotation += d as f32;
+
     }
 
     fn touch(&self, obj: &mut Node2d, _id: u64, touch: &Touch, pos: Vec2) {
         if let Move = touch {
             obj.set_global_position(pos.x, pos.y);
+        }
+    }
+
+    fn key(&self, _obj: &mut Node2d, _key: &Key, _keymod: miniquad::KeyMods, _touch: &Touch) {
+        if let Code(c) = _key {
+            println!("{:?}", c,)
         }
     }
 }
@@ -24,19 +33,30 @@ struct C;
 impl Module for C {
     fn start(&self, _obj: &mut Node2d) {
         get_data::<Audio>("ok").unwrap().play();
+        //get_stat(0);
         //set_camera(100., 0.);
         //set_window(get_window().x / 2., get_window().y / 2.);
         //wait(100.);
     }
 
-    fn update(&self, _obj: &mut Node2d, d: f64) {
+    fn update(&self, obj: &mut Node2d, d: f64) {
         let p = 100. * d as f32;
-        println!("{}", get_fps());
+        //println!("{}", get_fps());
         //println!("{} {}", get_mouse().x, get_mouse().y)
         //set_canvas(get_canvas().x + p, get_canvas().y);
         set_camera(get_camera().x + p, get_camera().y);
 
         let num= get_data::<u8>("num").unwrap();
+
+        add_stat(0, 1.);
+
+        //println!("{}", get_stat(0));
+
+        let a = format!("{}", get_stat(0));
+
+        obj.obj.set_text(&a);
+
+        //println!("{}", get_fps())
         //set_window(100., 100.);
         //obj.position.x += 1.;
     }
@@ -58,6 +78,8 @@ fn main() {
     set_data("ok", audio("./test/test.ogg"));
     set_data("num", 0u8);
 
+    set_stat(0, 0.);
+
     let o = String::from("ok");
     let s = node2d![
         //image("img", &texture("./image_example.png")),
@@ -66,7 +88,6 @@ fn main() {
             .position(100., 100.)
             .rotation(-180.)
             .color(rgb(255, 0, 0))
-            .script(&C)
             .keep(Center)
             .node(vec![rect("rect", 100., 100., 0.)
                 .position(200., 0.)
@@ -79,12 +100,17 @@ fn main() {
                     .color(rgba(255, 255, 255, 100))
                     .rotation(100.)
                     .scale(2., 1.)])]),
-        image("img", &text("Привет, пупсик", 500., &font("./test/calibri.ttf")))
+        text("kok", "Привет, пупсик", 250., &font("./test/calibri.ttf"))
             .position(300., 0.)
-            .rotation(100.),
-        //
+            .rotation(100.)
+            .script(&C)
+        //scroll()
+        //joystick
+        //button
+        //text
+        //label
         //image("img", "./test/python.png")
-        //text("ok", "Heeloo!!!1", "./text")
+        //text("ok", "as", 500., "./text")
     ]
     .script(&SCENE);
 

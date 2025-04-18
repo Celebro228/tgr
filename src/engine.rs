@@ -1,3 +1,5 @@
+use miniquad::KeyMods;
+
 pub use crate::info;
 pub use crate::object::*;
 pub use crate::physic::*;
@@ -8,6 +10,8 @@ pub use crate::data::*;
 pub use Keep::*;
 pub use Touch::*;
 pub use View::*;
+pub use Key::*;
+pub use miniquad::KeyCode::*;
 
 //pub const BLACK1: Rgba = Rgba::new(0.09, 0.99, 0.09, 1.0);
 
@@ -80,6 +84,14 @@ impl Engine {
         unsafe {
             if let Some(node) = &mut NODE2D {
                 node.draw();
+            }
+        }
+    }
+
+    pub(crate) fn key(&mut self, key: &Key, keymod: KeyMods, touch: &Touch) {
+        unsafe {
+            if let Some(node) = &mut NODE2D {
+                node.key(&key, keymod, touch);
             }
         }
     }
