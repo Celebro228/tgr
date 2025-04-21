@@ -232,7 +232,12 @@ impl EventHandler for QuadRender {
 
     fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
         Engine.touch(
-            0,
+            match button {
+                MouseButton::Left => 0,
+                MouseButton::Right => 1,
+                MouseButton::Middle => 2,
+                MouseButton::Unknown => 3,
+            },
             &Touch::Press,
             get_mouse_proj(x, y),
         );
@@ -240,7 +245,12 @@ impl EventHandler for QuadRender {
 
     fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
         Engine.touch(
-            0,
+            match button {
+                MouseButton::Left => 0,
+                MouseButton::Right => 1,
+                MouseButton::Middle => 2,
+                MouseButton::Unknown => 3,
+            },
             &Touch::Relese,
             get_mouse_proj(x, y),
         );

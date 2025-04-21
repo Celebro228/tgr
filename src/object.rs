@@ -192,7 +192,7 @@ impl Node2d {
         set_add_buffer();
     }
 
-    pub fn start(&mut self) {
+    pub(crate) fn start(&mut self) {
         if let Some(s) = self.script {
             s.start(self);
         }
@@ -205,7 +205,7 @@ impl Node2d {
         }
     }
 
-    pub fn update(&mut self) {
+    pub(crate) fn update(&mut self) {
         if let Some(s) = self.script {
             s.update(self, get_delta());
         }
@@ -377,7 +377,7 @@ pub fn image(name: &str, texture: &Texture) -> Node2d {
     Node2d::new(name, Obj2d::Texture(Texture { id: texture.id, width: texture.width, height: texture.height }))
 }
 
-pub trait Module: Sync {
+pub trait Module {
     fn start(&self, _obj: &mut Node2d) {}
     fn update(&self, _obj: &mut Node2d, _d: f64) {}
     fn key(&self, _obj: &mut Node2d, _key: &Key, _keymod: KeyMods, _touch: &Touch) {}
