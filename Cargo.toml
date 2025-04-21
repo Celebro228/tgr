@@ -24,9 +24,9 @@ quad-snd = "0.2.8"
 # default = ["miniquad"]
 # miniquad = ["dep:miniquad"]
 
-[[bin]]
-name = "test"
-path = "test/test.rs"
+# [[bin]]
+# name = "test"
+# path = "test/test.rs"
 
 [profile.dev]
 opt-level = 3

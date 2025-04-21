@@ -112,24 +112,24 @@ impl EventHandler for QuadRender {
         clear_render();
         Engine::draw2d();
 
-        /*if get_add_buffer() {
-            self.bindings.clear();
-
-            unsafe {
-                for i in &TEXUTRES_BUFFER {
-                    TEXUTRES.push(Some(self.ctx.new_texture_from_rgba8(i.1, i.2, &i.0)));
-                }
-                for i in &TEXUTRES_DELETE {
-                    if let Some(tex) = TEXUTRES[*i] {
-                        self.ctx.delete_texture(tex);
-                        TEXUTRES[*i] = None
-                    }
-                }
-                println!("{:?} {:?}", TEXUTRES, TEXUTRES_DELETE);
-
-                TEXUTRES_BUFFER.clear();
-                TEXUTRES_DELETE.clear();
+        unsafe {
+            for i in &TEXUTRES_BUFFER {
+                TEXUTRES.push(Some(self.ctx.new_texture_from_rgba8(i.1, i.2, &i.0)));
             }
+            
+            TEXUTRES_BUFFER.clear();
+
+            for i in &TEXUTRES_UPDATE {
+                if let Some(tex) = TEXUTRES[i.0] {
+                    self.ctx.texture_resize(tex, i.2 as u32, i.3 as u32, Some(&i.1));
+                    //self.ctx.texture_update_part(tex, 0, 0, i.2 as i32, i.3 as i32, &i.1);
+                }
+            }
+            TEXUTRES_UPDATE.clear();
+        }
+
+        if get_add_buffer() {
+            self.bindings.clear();
 
             for i in get_render() {
                 let vertex_buffer = self.ctx.new_buffer(
@@ -166,70 +166,6 @@ impl EventHandler for QuadRender {
             }
         } else {
             for i in get_render().iter().enumerate() {
-                self.ctx.buffer_update(
-                    self.bindings[i.0].vertex_buffers[0],
-                    BufferSource::slice(&i.1.0),
-                );
-                self.ctx.buffer_update(
-                    self.bindings[i.0].index_buffer,
-                    BufferSource::slice(&i.1.1),
-                );
-            }
-        }*/
-
-        unsafe {
-            for i in &TEXUTRES_BUFFER {
-                TEXUTRES.push(Some(self.ctx.new_texture_from_rgba8(i.1, i.2, &i.0)));
-            }
-            
-            TEXUTRES_BUFFER.clear();
-
-            for i in &TEXUTRES_UPDATE {
-                if let Some(tex) = TEXUTRES[i.0] {
-                    self.ctx.texture_update_part(tex, 0, 0, i.2 as i32, i.3 as i32, &i.1);
-                }
-            }
-            TEXUTRES_UPDATE.clear();
-        }
-
-        if get_add_buffer() {
-            self.bindings.clear();
-        }
-
-        for i in get_render().iter().enumerate() {
-            let images = if let Some(id) = i.1.2 {
-                unsafe {
-                    if let Some(tex) = TEXUTRES[id] {
-                        tex
-                    } else {
-                        self.white
-                    }
-                }
-            } else {
-                self.white
-            };
-
-            if get_add_buffer() {
-                let vertex_buffer = self.ctx.new_buffer(
-                    BufferType::VertexBuffer,
-                    BufferUsage::Dynamic,
-                    BufferSource::slice(&i.1.0),
-                );
-        
-                let index_buffer = self.ctx.new_buffer(
-                    BufferType::IndexBuffer,
-                    BufferUsage::Dynamic,
-                    BufferSource::slice(&i.1.1),
-                );
-        
-                let bindings = Bindings {
-                    vertex_buffers: vec![vertex_buffer],
-                    index_buffer,
-                    images: vec![images],
-                };
-
-                self.bindings.push(bindings);
-            } else {
                 self.ctx.buffer_update(
                     self.bindings[i.0].vertex_buffers[0],
                     BufferSource::slice(&i.1.0),

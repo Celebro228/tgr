@@ -32,7 +32,7 @@ struct C;
 
 impl Module for C {
     fn start(&self, _obj: &mut Node2d) {
-        get_data::<Audio>("ok").unwrap().play();
+        //get_data::<Audio>("ok").unwrap().play();
         //get_stat(0);
         //set_camera(100., 0.);
         //set_window(get_window().x / 2., get_window().y / 2.);
@@ -46,7 +46,7 @@ impl Module for C {
         //set_canvas(get_canvas().x + p, get_canvas().y);
         set_camera(get_camera().x + p, get_camera().y);
 
-        let num= get_data::<u8>("num").unwrap();
+        //let num= get_data::<u8>("num").unwrap();
 
         add_stat(0, 1.);
 
@@ -102,7 +102,7 @@ fn main() {
                     .scale(2., 1.)])]),
         text("kok", "Привет, пупсик", 250., &font("./test/calibri.ttf"))
             .position(300., 0.)
-            .rotation(100.)
+            .rotation(0.)
             .script(&C)
         //scroll()
         //joystick
