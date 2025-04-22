@@ -11,7 +11,7 @@ pub struct Rgba {
 }
 
 impl Rgba {
-    pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
+    pub const  fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self {
             r,
             g,
@@ -245,7 +245,7 @@ impl Node2d {
     }
 
     pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
-        for obj in &mut self.node {
+        for obj in &mut self.node.iter_mut().rev() {
             if get_touch() {
                 obj.touch(id, touch, pos);
             } else {
@@ -257,23 +257,28 @@ impl Node2d {
             if let Some(s) = self.script {
                 if match touch {
                     Touch::Press => {
+                        let dx = pos.x - self.global_position.x;
+                        let dy = pos.y - self.global_position.y;
+
+                        let sin = self.rotation.sin();
+                        let cos = self.rotation.cos();
+
+                        let local_x =  cos * dx + sin * dy;
+                        let local_y = -sin * dx + cos * dy;
+
                         if match &self.obj {
                             Obj2d::Rect(w, h, _) => {
-                                ((pos.x - self.global_position.x).abs()) / self.scale.x < w / 2.
-                                    && ((pos.y - self.global_position.y).abs()) / self.scale.y
-                                        < h / 2.
+                                (local_x.abs()) / self.scale.x < w / 2.
+                                    && (local_y.abs()) / self.scale.y < h / 2.
                             }
                             Obj2d::Circle(r) => {
-                                ((((pos.x - self.global_position.x).abs()) / self.scale.x).powi(2)
-                                    + (((pos.y - self.global_position.y).abs()) / self.scale.y)
-                                        .powi(2))
-                                .sqrt()
-                                    < *r
+                                ((local_x / self.scale.x).powi(2)
+                                    + (local_y / self.scale.y).powi(2))
+                                        .sqrt() < *r
                             }
                             Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
-                                ((pos.x - self.global_position.x).abs()) / self.scale.x < t.width / 2.
-                                    && ((pos.y - self.global_position.y).abs()) / self.scale.y
-                                        < t.height / 2.
+                                (local_x.abs()) / self.scale.x < t.width / 2.
+                                    && (local_y.abs()) / self.scale.y < t.height / 2.
                             }
                             Obj2d::None => true,
                         } {
@@ -311,12 +316,12 @@ pub fn rgb(r: u8, g: u8, b: u8) -> Rgba {
     }
 }
 #[inline(always)]
-pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Rgba {
+pub fn rgba(r: u8, g: u8, b: u8, a: f32) -> Rgba {
     Rgba {
         r: r as f32 / 255.,
         g: g as f32 / 255.,
         b: b as f32 / 255.,
-        a: a as f32 / 255.,
+        a,
     }
 }
 

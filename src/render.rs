@@ -2,7 +2,7 @@ use std::vec;
 
 use crate::{
     engine::{
-        add_fps_buffer, get_add_buffer, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_window_2, Engine, Key, Obj2d, Rgba, View
+        add_fps_buffer, get_add_buffer, get_backgraund, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_window_2, Engine, Key, Obj2d, Rgba, View
     },
     info::DEVICE,
     object::Touch,
@@ -177,10 +177,10 @@ impl EventHandler for QuadRender {
             }
         }
 
-        //let backgraund = get_backgraund();
+        let backgraund = get_backgraund();
 
         //self.ctx.clear(Some((backgraund.r, backgraund.g, backgraund.b, backgraund.a)), None, None);
-        self.ctx.begin_default_pass(Default::default());
+        self.ctx.begin_default_pass(PassAction::clear_color(backgraund.r, backgraund.g, backgraund.b, backgraund.a));
 
         self.ctx.apply_pipeline(&self.pipeline);
         self.ctx

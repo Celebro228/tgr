@@ -11,7 +11,7 @@ impl Module for P {
     }
 
     fn update(&self, obj: &mut Node2d, d: f64) {
-        obj.rotation += d as f32;
+        obj.rotation += d as f32 / 10.;
 
     }
 
@@ -49,6 +49,7 @@ impl Module for C {
         //let num= get_data::<u8>("num").unwrap();
 
         add_stat(0, 1.);
+        save_stat(0, *get_stat(0));
 
         //println!("{}", get_stat(0));
 
@@ -78,7 +79,7 @@ fn main() {
     set_data("ok", audio("./test/test.ogg"));
     set_data("num", 0u8);
 
-    set_stat(0, 0.);
+    set_stat(0, load_stat(0));
 
     let o = String::from("ok");
     let s = node2d![
@@ -97,7 +98,7 @@ fn main() {
                     .position(0., -200.)
                     .script(&P)
                     .color(hsv(50., 50., 50.))
-                    .color(rgba(255, 255, 255, 100))
+                    .color(rgba(209, 30, 30, 0.74))
                     .rotation(100.)
                     .scale(2., 1.)])]),
         text("kok", "Привет, пупсик", 250., &font("./test/calibri.ttf"))

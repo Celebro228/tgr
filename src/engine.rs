@@ -13,7 +13,7 @@ pub use View::*;
 pub use Key::*;
 pub use miniquad::KeyCode::*;
 
-//pub const BLACK1: Rgba = Rgba::new(0.09, 0.99, 0.09, 1.0);
+pub const BLACK: Rgba = Rgba::new(0., 0., 0., 1.0);
 
 static mut WINDOW: Vec2 = Vec2::new(1280., 720.);
 static mut WINDOW_UPDATE: bool = false;
@@ -27,7 +27,7 @@ static mut VIEW_HEIGHT: View = View::KeepWidth;
 
 static mut ADD_BUFFER: bool = true;
 
-//static mut BACKGRAUND: Rgba = BLACK1;
+static mut BACKGRAUND: Rgba = BLACK;
 static mut CAMERA: Vec2 = Vec2::new(0., 0.);
 static mut ZOOM: f32 = 1.;
 
@@ -60,15 +60,7 @@ pub struct Engine;
 
 impl Engine {
     pub fn start(self, name: &str) -> Self {
-        unsafe {
-            if let Some(node) = &mut NODE2D {
-                node.start();
-            }
-        }
-
-        //AudioModule::start();
         Render::start(name);
-
         self
     }
 
@@ -108,6 +100,10 @@ impl Engine {
     pub fn node2d(self, node: Node2d) -> Self {
         unsafe {
             NODE2D = Some(node);
+
+            if let Some(node) = &mut NODE2D {
+                node.start();
+            }
         }
         self
     }
@@ -120,9 +116,7 @@ impl Engine {
     }
 
     pub fn window(self, x: f32, y: f32) -> Self {
-        unsafe {
-            WINDOW = vec2(x, y);
-        }
+        set_window_2(x, y);
         self
     }
 
@@ -158,6 +152,13 @@ impl Engine {
         unsafe {
             VIEW_WIDTH = width;
             VIEW_HEIGHT = height;
+        }
+        self
+    }
+
+    pub fn backgraund(self, color: Rgba) -> Self {
+        unsafe {
+            BACKGRAUND = color;
         }
         self
     }
@@ -260,16 +261,10 @@ pub(crate) fn get_add_buffer() -> bool {
     }
 }
 
-/*#[inline(always)]
+#[inline(always)]
 pub fn get_backgraund() -> &'static Rgba {
     unsafe { &BACKGRAUND }
 }
-#[inline(always)]
-pub fn set_backgraund(color: Rgba) {
-    unsafe {
-        BACKGRAUND = color;
-    }
-}*/
 #[inline(always)]
 pub fn get_camera() -> Vec2 {
     unsafe { CAMERA }
