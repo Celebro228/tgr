@@ -2,7 +2,7 @@ use std::vec;
 
 use crate::{
     engine::{
-        add_fps_buffer, get_add_buffer, get_backgraund, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_window_2, Engine, Key, Obj2d, Rgba, View
+        add_fps_buffer, get_add_buffer, get_backgraund, get_camera, get_canvas, get_canvas_update, get_fps, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_mouse_wheel_d, set_window_2, Engine, Key, Obj2d, Rgba, View
     },
     info::DEVICE,
     object::Touch,
@@ -108,6 +108,7 @@ impl EventHandler for QuadRender {
         }
 
         set_mouse_d(0., 0.);
+        set_mouse_wheel_d(0., 0.);
 
         clear_render();
         Engine::draw2d();
@@ -256,6 +257,10 @@ impl EventHandler for QuadRender {
         );
     }
 
+    fn mouse_wheel_event(&mut self, x: f32, y: f32) {
+        set_mouse_wheel_d(x, y);
+    }
+
     fn touch_event(&mut self, phase: TouchPhase, id: u64, x: f32, y: f32) {
         match phase {
             TouchPhase::Started => {
@@ -340,6 +345,11 @@ fn set_proj() {
             set_mouse_proj(canvas.x / window.x, canvas.y / window.y);
             set_canvas_proj(canvas.x, canvas.y);
             Mat4::orthographic_rh_gl(-canvas.x, canvas.x, canvas.y, -canvas.y, -1.0, 1.0)
+        }
+        View::Window => {
+            set_mouse_proj(1., 1.);
+            set_canvas_proj(window.x, window.y);
+            Mat4::orthographic_rh_gl(-window.x, window.x, window.y, -window.y, -1.0, 1.0)
         }
     };
 

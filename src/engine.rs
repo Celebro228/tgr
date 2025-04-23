@@ -1,5 +1,7 @@
 use miniquad::KeyMods;
 
+pub use std::f32::consts::{TAU, PI};
+
 pub use crate::info;
 pub use crate::object::*;
 pub use crate::physic::*;
@@ -7,7 +9,6 @@ pub use crate::render::*;
 pub use crate::audio::*;
 pub use crate::data::*;
 
-pub use Keep::*;
 pub use Touch::*;
 pub use View::*;
 pub use Key::*;
@@ -43,6 +44,7 @@ static mut LAST_FRAME_TIME: f64 = 0.;
 
 static mut MOUSE: Vec2 = Vec2::new(0., 0.);
 static mut MOUSE_DELTA: Vec2 = Vec2::new(0., 0.);
+static mut MOUSE_WHEEL_DELTA: Vec2 = Vec2::new(0., 0.);
 
 static mut TOUCH: bool = false;
 
@@ -54,6 +56,7 @@ pub enum View {
     KeepWidth,
     KeepHeight,
     Scale,
+    Window,
 }
 
 pub struct Engine;
@@ -320,6 +323,17 @@ pub fn get_mouse_d() -> Vec2 {
 pub(crate) fn set_mouse_d(x: f32, y: f32) {
     unsafe {
         MOUSE_DELTA = vec2(x, y);
+    }
+}
+
+#[inline(always)]
+pub fn get_mouse_wheel_d() -> Vec2 {
+    unsafe { MOUSE_WHEEL_DELTA }
+}
+#[inline(always)]
+pub(crate) fn set_mouse_wheel_d(x: f32, y: f32) {
+    unsafe {
+        MOUSE_WHEEL_DELTA = vec2(x, y);
     }
 }
 

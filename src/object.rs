@@ -3,6 +3,7 @@ use crate::engine::{add_text, add_texture, draw2d, get_camera, get_canvas_proj, 
 pub use glam::{vec2, Vec2};
 use miniquad::{KeyCode, KeyMods};
 
+#[derive(Debug, Clone, Copy)]
 pub struct Rgba {
     pub r: f32,
     pub g: f32,
@@ -155,6 +156,10 @@ impl Node2d {
     pub fn keep(mut self, keep: Keep) -> Self {
         self.keep = keep;
         self
+    }
+    
+    pub fn get_parent_position(&mut self) -> Vec2 {
+        self.parent_position
     }
 
     pub fn set_global_position(&mut self, x: f32, y: f32) {
