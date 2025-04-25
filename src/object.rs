@@ -1,7 +1,13 @@
-use crate::engine::{add_text, add_texture, draw2d, get_camera, get_canvas_proj, get_delta, get_font, get_touch, set_add_buffer, set_touch};
+use std::collections::HashMap;
+
+use crate::engine::{
+    add_text, add_texture, draw2d, get_camera, get_canvas_proj, get_delta, get_font, get_touch,
+    set_add_buffer, set_touch,
+};
 
 pub use glam::{vec2, Vec2};
 use miniquad::{KeyCode, KeyMods};
+use std::any::Any;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Rgba {
@@ -12,13 +18,8 @@ pub struct Rgba {
 }
 
 impl Rgba {
-    pub const  fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self {
-            r,
-            g,
-            b,
-            a,
-        }
+    pub const fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
+        Self { r, g, b, a }
     }
 
     pub fn get(&self) -> [f32; 4] {
@@ -27,7 +28,7 @@ impl Rgba {
 }
 
 pub struct Font {
-    pub(crate) id: usize
+    pub(crate) id: usize,
 }
 pub struct Texture {
     pub(crate) id: usize,
@@ -96,6 +97,7 @@ pub struct Node2d {
     pub visible: bool,
     pub(crate) node: Vec<Node2d>,
     pub script: Option<&'static dyn Module>,
+    pub hash: HashMap<&'static str, Box<dyn Any + Send + Sync>>,
     touch_id: Option<u64>,
 }
 
@@ -109,17 +111,23 @@ impl Node2d {
             position: Vec2::new(0., 0.),
             rotation: 0.,
             scale: Vec2::new(1., 1.),
-            color: rgb(255, 255, 255),
+            color: rgb(234, 234, 234),
             visible: true,
             keep: Keep::Canvas,
             node: Vec::new(),
             script: None,
+            hash: HashMap::new(),
             touch_id: None,
         }
     }
 
     pub fn node(mut self, node: Vec<Node2d>) -> Self {
         self.node.extend(node);
+        self
+    }
+
+    pub fn hash<T: 'static + Send + Sync>(mut self, key: &'static str, value: T) -> Self {
+        self.hash.insert(key, Box::new(value));
         self
     }
 
@@ -157,7 +165,7 @@ impl Node2d {
         self.keep = keep;
         self
     }
-    
+
     pub fn get_parent_position(&mut self) -> Vec2 {
         self.parent_position
     }
@@ -175,10 +183,18 @@ impl Node2d {
             Keep::Down => get_camera() + self.position + vec2(0., get_canvas_proj().y),
             Keep::Left => get_camera() + self.position + vec2(-get_canvas_proj().x, 0.),
             Keep::Right => get_camera() + self.position + vec2(get_canvas_proj().x, 0.),
-            Keep::LeftUp => get_camera() + self.position + vec2(-get_canvas_proj().x, -get_canvas_proj().y),
-            Keep::LeftDown => get_camera() + self.position + vec2(-get_canvas_proj().x, get_canvas_proj().y),
-            Keep::RightUp => get_camera() + self.position + vec2(get_canvas_proj().x, -get_canvas_proj().y),
-            Keep::RightDown => get_camera() + self.position + vec2(get_canvas_proj().x, get_canvas_proj().y),
+            Keep::LeftUp => {
+                get_camera() + self.position + vec2(-get_canvas_proj().x, -get_canvas_proj().y)
+            }
+            Keep::LeftDown => {
+                get_camera() + self.position + vec2(-get_canvas_proj().x, get_canvas_proj().y)
+            }
+            Keep::RightUp => {
+                get_camera() + self.position + vec2(get_canvas_proj().x, -get_canvas_proj().y)
+            }
+            Keep::RightDown => {
+                get_camera() + self.position + vec2(get_canvas_proj().x, get_canvas_proj().y)
+            }
         }
     }
 
@@ -195,6 +211,14 @@ impl Node2d {
     pub fn add_node(&mut self, node: Vec<Node2d>) {
         self.node.extend(node);
         set_add_buffer();
+    }
+
+    pub fn set_hash<T: 'static + Send + Sync>(&mut self, key: &'static str, value: T) {
+        self.hash.insert(key, Box::new(value));
+    }
+
+    pub fn get_hash<T: 'static>(&self, key: &'static str) -> Option<&T> {
+        self.hash.get(key)?.downcast_ref::<T>()
     }
 
     pub(crate) fn start(&mut self) {
@@ -223,19 +247,22 @@ impl Node2d {
         }
     }
 
-    pub(crate) fn draw(&mut self) {
+    pub(crate) fn draw(&mut self, a: f32) {
+        let mut color = self.color.get();
+        color[3] *= a;
+
         if self.visible {
             draw2d(
                 self.global_position,
                 &self.obj,
                 self.scale,
                 self.rotation,
-                self.color.get(),
+                color,
             );
         }
 
         for obj in &mut self.node {
-            obj.draw();
+            obj.draw(color[3]);
         }
     }
 
@@ -268,7 +295,7 @@ impl Node2d {
                         let sin = self.rotation.sin();
                         let cos = self.rotation.cos();
 
-                        let local_x =  cos * dx + sin * dy;
+                        let local_x = cos * dx + sin * dy;
                         let local_y = -sin * dx + cos * dy;
 
                         if match &self.obj {
@@ -279,7 +306,8 @@ impl Node2d {
                             Obj2d::Circle(r) => {
                                 ((local_x / self.scale.x).powi(2)
                                     + (local_y / self.scale.y).powi(2))
-                                        .sqrt() < *r
+                                .sqrt()
+                                    < *r
                             }
                             Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
                                 (local_x.abs()) / self.scale.x < t.width / 2.
@@ -363,13 +391,29 @@ pub fn font(path: &str) -> Font {
 #[inline(always)]
 pub fn texture(path: &str) -> Texture {
     let (id, w, h) = add_texture(path);
-    Texture { id, width: w, height: h }
+    Texture {
+        id,
+        width: w,
+        height: h,
+    }
 }
 
 #[inline(always)]
 pub fn text(name: &str, text: &str, size: f32, font: &Font) -> Node2d {
     let (id, w, h) = add_text(text, size, font.id, None);
-    Node2d::new(name, Obj2d::Text(text.to_string(), size, font.id, Texture { id, width: w, height: h }))
+    Node2d::new(
+        name,
+        Obj2d::Text(
+            text.to_string(),
+            size,
+            font.id,
+            Texture {
+                id,
+                width: w,
+                height: h,
+            },
+        ),
+    )
 }
 
 #[inline(always)]
@@ -384,12 +428,19 @@ pub fn rect(name: &str, w: f32, h: f32, r: f32) -> Node2d {
 
 #[inline(always)]
 pub fn image(name: &str, texture: &Texture) -> Node2d {
-    Node2d::new(name, Obj2d::Texture(Texture { id: texture.id, width: texture.width, height: texture.height }))
+    Node2d::new(
+        name,
+        Obj2d::Texture(Texture {
+            id: texture.id,
+            width: texture.width,
+            height: texture.height,
+        }),
+    )
 }
 
 pub trait Module {
     fn start(&self, _obj: &mut Node2d) {}
-    fn update(&self, _obj: &mut Node2d, _d: f64) {}
+    fn update(&self, _obj: &mut Node2d, _d: f32) {}
     fn key(&self, _obj: &mut Node2d, _key: &Key, _keymod: KeyMods, _touch: &Touch) {}
     fn touch(&self, _obj: &mut Node2d, _id: u64, _touch: &Touch, _pos: Vec2) {
         set_touch(true);

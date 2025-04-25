@@ -25,9 +25,9 @@ quad-storage = "0.1.3"
 # default = ["miniquad"]
 # miniquad = ["dep:miniquad"]
 
-# [[bin]]
-# name = "test"
-# path = "test/test.rs"
+[[bin]]
+name = "test"
+path = "test/test.rs"
 
 [profile.dev]
 opt-level = 3

@@ -10,9 +10,8 @@ impl Module for P {
         //
     }
 
-    fn update(&self, obj: &mut Node2d, d: f64) {
+    fn update(&self, obj: &mut Node2d, d: f32) {
         obj.rotation += d as f32 / 10.;
-
     }
 
     fn touch(&self, obj: &mut Node2d, _id: u64, touch: &Touch, pos: Vec2) {
@@ -39,12 +38,12 @@ impl Module for C {
         //wait(100.);
     }
 
-    fn update(&self, obj: &mut Node2d, d: f64) {
+    fn update(&self, obj: &mut Node2d, d: f32) {
         let p = 100. * d as f32;
         //println!("{}", get_fps());
         //println!("{} {}", get_mouse().x, get_mouse().y)
         //set_canvas(get_canvas().x + p, get_canvas().y);
-        set_camera(get_camera().x + p, get_camera().y);
+        //set_camera(get_camera().x + p, get_camera().y);
 
         //let num= get_data::<u8>("num").unwrap();
 
@@ -81,6 +80,8 @@ fn main() {
 
     set_stat(0, load_stat(0));
 
+    let font = font("./test/calibri.ttf");
+
     let o = String::from("ok");
     let s = node2d![
         //image("img", &texture("./image_example.png")),
@@ -101,17 +102,19 @@ fn main() {
                     .color(rgba(209, 30, 30, 0.74))
                     .rotation(100.)
                     .scale(2., 1.)])]),
-        text("kok", "Привет, пупсик", 250., &font("./test/calibri.ttf"))
+        text("kok", "Привет, пупсик", 250., &font)
             .position(300., 0.)
             .rotation(0.)
-            .script(&C)
-        //scroll()
-        //joystick
-        //button
-        //text
-        //label
-        //image("img", "./test/python.png")
-        //text("ok", "as", 500., "./text")
+            .script(&C),
+        //button("ok", "asasdasdd", 500., &font),
+        //check("a", 500.)
+        edittext("tok", "hudden", 250., &font) //scroll()
+                                               //joystick
+                                               //button
+                                               //text
+                                               //label
+                                               //image("img", "./test/python.png")
+                                               //text("ok", "as", 500., "./text")
     ]
     .script(&SCENE);
 

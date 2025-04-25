@@ -20,7 +20,7 @@ impl Audio {
         }
     }
 
-    pub fn stop(&self,) {
+    pub fn stop(&self) {
         unsafe {
             SOUNDS[self.id].stop(&audio_ctx());
         }
@@ -38,7 +38,9 @@ pub fn audio(path: &str) -> Audio {
         let audio = Sound::load(&audio_ctx(), &file);
 
         SOUNDS.push(audio);
-        Audio { id: SOUNDS.len() - 1 }
+        Audio {
+            id: SOUNDS.len() - 1,
+        }
     }
 }
 

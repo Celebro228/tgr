@@ -2,14 +2,19 @@ use std::vec;
 
 use crate::{
     engine::{
-        add_fps_buffer, get_add_buffer, get_backgraund, get_camera, get_canvas, get_canvas_update, get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time, get_view_height, get_view_width, get_window, get_window_resizable, get_window_update, get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_mouse_wheel_d, set_window_2, Engine, Key, Obj2d, View
+        add_fps_buffer, get_add_buffer, get_backgraund, get_camera, get_canvas, get_canvas_update,
+        get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time,
+        get_view_height, get_view_width, get_window, get_window_resizable, get_window_update,
+        get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time,
+        set_last_frame_time, set_mouse, set_mouse_d, set_mouse_wheel_d, set_window_2, Engine, Key,
+        Obj2d, View,
     },
     info::DEVICE,
     object::Touch,
 };
 use glam::{mat4, vec2, Mat4, Vec2, Vec3};
-use miniquad::{window::set_window_size, *};
 use image::{DynamicImage, GenericImageView, ImageBuffer};
+use miniquad::{window::set_window_size, *};
 use rusttype::{point, Font, Point, Scale};
 
 static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> = Vec::new();
@@ -73,18 +78,23 @@ impl QuadRender {
                 VertexAttribute::new("in_uv", VertexFormat::Float2),
             ],
             shader,
-            PipelineParams{
-                color_blend: Some(BlendState::new(Equation::Add, BlendFactor::Value(BlendValue::SourceAlpha), BlendFactor::OneMinusValue(BlendValue::SourceAlpha))),
+            PipelineParams {
+                color_blend: Some(BlendState::new(
+                    Equation::Add,
+                    BlendFactor::Value(BlendValue::SourceAlpha),
+                    BlendFactor::OneMinusValue(BlendValue::SourceAlpha),
+                )),
                 alpha_blend: Some(BlendState::new(
                     Equation::Add,
                     BlendFactor::Zero,
-                    BlendFactor::One)),
+                    BlendFactor::One,
+                )),
                 ..Default::default()
             },
         );
 
         set_last_frame_time(date::now());
-        set_last_fps_time(get_last_frame_time()+1.);
+        set_last_fps_time(get_last_frame_time() + 1.);
 
         Self {
             pipeline,
@@ -117,12 +127,13 @@ impl EventHandler for QuadRender {
             for i in &TEXUTRES_BUFFER {
                 TEXUTRES.push(Some(self.ctx.new_texture_from_rgba8(i.1, i.2, &i.0)));
             }
-            
+
             TEXUTRES_BUFFER.clear();
 
             for i in &TEXUTRES_UPDATE {
                 if let Some(tex) = TEXUTRES[i.0] {
-                    self.ctx.texture_resize(tex, i.2 as u32, i.3 as u32, Some(&i.1));
+                    self.ctx
+                        .texture_resize(tex, i.2 as u32, i.3 as u32, Some(&i.1));
                     //self.ctx.texture_update_part(tex, 0, 0, i.2 as i32, i.3 as i32, &i.1);
                 }
             }
@@ -138,7 +149,7 @@ impl EventHandler for QuadRender {
                     BufferUsage::Dynamic,
                     BufferSource::slice(&i.0),
                 );
-        
+
                 let index_buffer = self.ctx.new_buffer(
                     BufferType::IndexBuffer,
                     BufferUsage::Dynamic,
@@ -156,7 +167,7 @@ impl EventHandler for QuadRender {
                 } else {
                     self.white
                 };
-        
+
                 let bindings = Bindings {
                     vertex_buffers: vec![vertex_buffer],
                     index_buffer,
@@ -169,11 +180,11 @@ impl EventHandler for QuadRender {
             for i in get_render().iter().enumerate() {
                 self.ctx.buffer_update(
                     self.bindings[i.0].vertex_buffers[0],
-                    BufferSource::slice(&i.1.0),
+                    BufferSource::slice(&i.1 .0),
                 );
                 self.ctx.buffer_update(
                     self.bindings[i.0].index_buffer,
-                    BufferSource::slice(&i.1.1),
+                    BufferSource::slice(&i.1 .1),
                 );
             }
         }
@@ -181,31 +192,36 @@ impl EventHandler for QuadRender {
         let backgraund = get_backgraund();
 
         //self.ctx.clear(Some((backgraund.r, backgraund.g, backgraund.b, backgraund.a)), None, None);
-        self.ctx.begin_default_pass(PassAction::clear_color(backgraund.r, backgraund.g, backgraund.b, backgraund.a));
+        self.ctx.begin_default_pass(PassAction::clear_color(
+            backgraund.r,
+            backgraund.g,
+            backgraund.b,
+            backgraund.a,
+        ));
 
         self.ctx.apply_pipeline(&self.pipeline);
         self.ctx
-            .apply_uniforms(UniformsSource::table(&shader::Uniforms { mvp: unsafe {
-                PROJ
-            } }));
+            .apply_uniforms(UniformsSource::table(&shader::Uniforms {
+                mvp: unsafe { PROJ },
+            }));
 
         for i in get_render().iter().enumerate() {
             self.ctx.apply_bindings(&self.bindings[i.0]);
-            self.ctx.draw(0, i.1.1.len() as i32, 1);
+            self.ctx.draw(0, i.1 .1.len() as i32, 1);
         }
-        
+
         self.ctx.end_render_pass();
 
         self.ctx.commit_frame();
 
-        set_delta(date::now() - get_last_frame_time());
+        set_delta((date::now() - get_last_frame_time()) as f32);
         set_last_frame_time(date::now());
 
         add_fps_buffer(1);
         if get_last_fps_time() <= get_last_frame_time() {
             set_fps(get_fps_buffer());
             set_fps_buffer(0);
-            set_last_fps_time(get_last_frame_time()+1.);
+            set_last_fps_time(get_last_frame_time() + 1.);
         }
     }
 
@@ -216,15 +232,10 @@ impl EventHandler for QuadRender {
 
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
         let mouse = get_mouse_proj(x, y);
-        set_mouse(
-            mouse.x,
-            mouse.y,
-        );
-        Engine.touch(
-            0,
-            &Touch::Move,
-            vec2(mouse.x, mouse.y)
-        );
+
+        set_mouse(mouse.x, mouse.y);
+
+        Engine.touch(0, &Touch::Move, vec2(mouse.x, mouse.y));
     }
 
     fn raw_mouse_motion(&mut self, dx: f32, dy: f32) {
@@ -348,7 +359,7 @@ fn set_proj() {
         }
         View::Window => {
             let window = window * get_zoom();
-            set_mouse_proj(1., 1.);
+            set_mouse_proj(get_zoom(), get_zoom());
             set_canvas_proj(window.x, window.y);
             Mat4::orthographic_rh_gl(-window.x, window.x, window.y, -window.y, -1.0, 1.0)
         }
@@ -429,10 +440,10 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
                 let half_segments = segments / 4;
 
                 let corner_centers = [
-                    vec2(w - r, h - r), // bottom-right
-                    vec2(-w + r, h - r), // bottom-left
+                    vec2(w - r, h - r),   // bottom-right
+                    vec2(-w + r, h - r),  // bottom-left
                     vec2(-w + r, -h + r), // top-left
-                    vec2(w - r, -h + r), // top-right
+                    vec2(w - r, -h + r),  // top-right
                 ];
 
                 vertices.push(Vertex {
@@ -440,10 +451,11 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
                     color,
                     uv: Vec2::new(0., 0.),
                 });
-    
+
                 for (corner_index, &center) in corner_centers.iter().enumerate() {
                     for i in 0..half_segments {
-                        let theta = (corner_index * half_segments + i) as f32 / segments as f32 * std::f32::consts::TAU;
+                        let theta = (corner_index * half_segments + i) as f32 / segments as f32
+                            * std::f32::consts::TAU;
                         let x = center.x + r * theta.cos() * scale.x;
                         let y = center.y + r * theta.sin() * scale.y;
                         let p = rotate(vec2(x, y), pos, rotation);
@@ -454,19 +466,14 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
                         });
                     }
                 }
-                
-    
+
                 for i in 1..segments {
                     indices.extend([0, i as u16, (i + 1) as u16]);
                 }
                 indices.extend([0, segments as u16, 1]);
             }
 
-            add_render(
-                vertices,
-                indices,
-                None
-            );
+            add_render(vertices, indices, None);
         }
         Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
             let w = (t.width as f32 * scale.x) / 2.;
@@ -503,9 +510,10 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
 
 #[inline(always)]
 fn rotate(p: Vec2, center: Vec2, rotation: f32) -> Vec2 {
-    if rotation != 0. {let s = rotation.sin();
+    if rotation != 0. {
+        let s = rotation.sin();
         let c = rotation.cos();
-    
+
         vec2(p.x * c - p.y * s, p.x * s + p.y * c) + center
     } else {
         p + center
@@ -534,7 +542,7 @@ pub(crate) fn get_font(path: &str) -> usize {
     let file = std::fs::read(path).unwrap();
     let file: &'static [u8] = Box::leak(file.into_boxed_slice());
     let font = Font::try_from_bytes(&file).expect("Error font bytes");
-    
+
     unsafe {
         FONTS.push(font);
         FONTS.len() - 1
@@ -573,7 +581,12 @@ pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
     }*/
 }
 
-pub(crate) fn add_text(text: &str, size: f32, font_id: usize, upd: Option<usize>) -> (usize, f32, f32) {
+pub(crate) fn add_text(
+    text: &str,
+    size: f32,
+    font_id: usize,
+    upd: Option<usize>,
+) -> (usize, f32, f32) {
     let scale = Scale::uniform(size);
 
     let font = unsafe { &FONTS[font_id] };
@@ -584,27 +597,27 @@ pub(crate) fn add_text(text: &str, size: f32, font_id: usize, upd: Option<usize>
         .layout(text, scale, point(20.0, 20.0 + v_metrics.ascent))
         .collect();
 
-        let (min_x, max_x, min_y, max_y) = {
-            let first = glyphs.first().and_then(|g| g.pixel_bounding_box()).unwrap();
-            let last = glyphs.last().and_then(|g| g.pixel_bounding_box()).unwrap();
-    
-            let (mut min_x, mut max_x) = (first.min.x, last.max.x);
-            let (mut min_y, mut max_y) = (first.min.y, last.max.y);
-    
-            for g in &glyphs {
-                if let Some(bb) = g.pixel_bounding_box() {
-                    min_x = min_x.min(bb.min.x);
-                    max_x = max_x.max(bb.max.x);
-                    min_y = min_y.min(bb.min.y);
-                    max_y = max_y.max(bb.max.y);
-                }
+    let (min_x, max_x, min_y, max_y) = {
+        let first = glyphs.first().and_then(|g| g.pixel_bounding_box()).unwrap();
+        let last = glyphs.last().and_then(|g| g.pixel_bounding_box()).unwrap();
+
+        let (mut min_x, mut max_x) = (first.min.x, last.max.x);
+        let (mut min_y, mut max_y) = (first.min.y, last.max.y);
+
+        for g in &glyphs {
+            if let Some(bb) = g.pixel_bounding_box() {
+                min_x = min_x.min(bb.min.x);
+                max_x = max_x.max(bb.max.x);
+                min_y = min_y.min(bb.min.y);
+                max_y = max_y.max(bb.max.y);
             }
-    
-            (min_x, max_x, min_y, max_y)
-        };
-    
-        let width = (max_x - min_x) as u32;
-        let height = (max_y - min_y) as u32;
+        }
+
+        (min_x, max_x, min_y, max_y)
+    };
+
+    let width = (max_x - min_x) as u32;
+    let height = (max_y - min_y) as u32;
 
     let mut image = DynamicImage::new_rgba8(width, height).to_rgba8();
 
@@ -629,7 +642,6 @@ pub(crate) fn add_text(text: &str, size: f32, font_id: usize, upd: Option<usize>
     }
 }
 
-
 #[inline(always)]
 fn set_mouse_proj(x: f32, y: f32) {
     unsafe {
@@ -638,9 +650,8 @@ fn set_mouse_proj(x: f32, y: f32) {
 }
 #[inline(always)]
 fn get_mouse_proj(x: f32, y: f32) -> Vec2 {
-    let half_window = get_window() / 2.;
     //y - half_window.y) * get_mouse_proj().y - get_camera().y,
-    unsafe { (vec2(x, y) - half_window) * MOUSE_PROJ + get_camera() }
+    unsafe { (vec2(x, y) - get_window() / 2.) * MOUSE_PROJ + get_camera() }
 }
 
 mod shader {

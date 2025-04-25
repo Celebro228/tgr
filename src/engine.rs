@@ -1,18 +1,20 @@
 use miniquad::KeyMods;
 
-pub use std::f32::consts::{TAU, PI};
+pub use std::f32::consts::{PI, TAU};
 
+pub use crate::audio::*;
+pub use crate::data::*;
 pub use crate::info;
 pub use crate::object::*;
 pub use crate::physic::*;
 pub use crate::render::*;
-pub use crate::audio::*;
-pub use crate::data::*;
+pub use crate::widgets::*;
 
+pub use miniquad::{date, KeyCode::*};
+pub use Keep::*;
+pub use Key::*;
 pub use Touch::*;
 pub use View::*;
-pub use Key::*;
-pub use miniquad::KeyCode::*;
 
 pub const BLACK: Rgba = Rgba::new(0., 0., 0., 1.0);
 
@@ -36,10 +38,10 @@ static mut RESIZABLE: bool = true;
 static mut FULLSCREEN: bool = false;
 static mut HIGH_DPI: bool = true;
 
-static mut SCRIPT: Option<&'static dyn Module> = None;
+//static mut SCRIPT: Option<&'static dyn Module> = None;
 static mut NODE2D: Option<Node2d> = None;
 
-static mut DELTA: f64 = 0.;
+static mut DELTA: f32 = 0.;
 static mut LAST_FRAME_TIME: f64 = 0.;
 
 static mut MOUSE: Vec2 = Vec2::new(0., 0.);
@@ -78,7 +80,7 @@ impl Engine {
     pub(crate) fn draw2d() {
         unsafe {
             if let Some(node) = &mut NODE2D {
-                node.draw();
+                node.draw(1.);
             }
         }
     }
@@ -111,12 +113,12 @@ impl Engine {
         self
     }
 
-    pub fn script(self, script: &'static dyn Module) -> Self {
+    /*pub fn script<T: Module + 'static>(self, script: &'static T) -> Self {
         unsafe {
             SCRIPT = Some(script);
         }
         self
-    }
+    }*/
 
     pub fn window(self, x: f32, y: f32) -> Self {
         set_window_2(x, y);
@@ -349,11 +351,11 @@ pub(crate) fn set_touch(sel: bool) {
 }
 
 #[inline(always)]
-pub(crate) fn get_delta() -> f64 {
+pub(crate) fn get_delta() -> f32 {
     unsafe { DELTA }
 }
 #[inline(always)]
-pub(crate) fn set_delta(delta: f64) {
+pub(crate) fn set_delta(delta: f32) {
     unsafe {
         DELTA = delta;
     }
