@@ -11,6 +11,7 @@ pub mod widgets;
 pub mod info;
 
 /*
+Offfset@
 Виджеты
 Оптимизация буфера рендера*
 Линия*

@@ -10,7 +10,7 @@ pub use crate::physic::*;
 pub use crate::render::*;
 pub use crate::widgets::*;
 
-pub use miniquad::{date, KeyCode::*};
+pub use miniquad::date;
 pub use Keep::*;
 pub use Key::*;
 pub use Touch::*;

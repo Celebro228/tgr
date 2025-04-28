@@ -94,6 +94,7 @@ pub struct Node2d {
     pub scale: Vec2,
     pub color: Rgba,
     pub keep: Keep,
+    pub offset: Vec2,
     pub visible: bool,
     pub(crate) node: Vec<Node2d>,
     pub script: Option<&'static dyn Module>,
@@ -114,6 +115,7 @@ impl Node2d {
             color: rgb(234, 234, 234),
             visible: true,
             keep: Keep::Canvas,
+            offset: Vec2::new(0., 0.),
             node: Vec::new(),
             script: None,
             hash: HashMap::new(),
@@ -163,6 +165,11 @@ impl Node2d {
 
     pub fn keep(mut self, keep: Keep) -> Self {
         self.keep = keep;
+        self
+    }
+
+    pub fn offset(mut self, x: f32, y: f32) -> Self {
+        self.offset = vec2(x, y);
         self
     }
 
@@ -221,6 +228,10 @@ impl Node2d {
         self.hash.get(key)?.downcast_ref::<T>()
     }
 
+    pub fn get_hash_mut<T: 'static>(&mut self, key: &'static str) -> Option<&mut T> {
+        self.hash.get_mut(key)?.downcast_mut::<T>()
+    }
+
     pub(crate) fn start(&mut self) {
         if let Some(s) = self.script {
             s.start(self);
@@ -257,6 +268,7 @@ impl Node2d {
                 &self.obj,
                 self.scale,
                 self.rotation,
+                self.offset,
                 color,
             );
         }
@@ -300,18 +312,25 @@ impl Node2d {
 
                         if match &self.obj {
                             Obj2d::Rect(w, h, _) => {
-                                (local_x.abs()) / self.scale.x < w / 2.
-                                    && (local_y.abs()) / self.scale.y < h / 2.
+                                let offset = self.offset * vec2(*w, *h) * self.scale;
+
+                                ((local_x - offset.x).abs()) / self.scale.x + offset.x < w / 2.
+                                    && ((local_y - offset.y).abs()) / self.scale.y + offset.y
+                                        < h / 2.
                             }
                             Obj2d::Circle(r) => {
-                                ((local_x / self.scale.x).powi(2)
-                                    + (local_y / self.scale.y).powi(2))
+                                let offset = self.offset * r * self.scale;
+
+                                (((local_x - offset.x) / self.scale.x).powi(2)
+                                    + ((local_y - offset.y) / self.scale.y).powi(2))
                                 .sqrt()
                                     < *r
                             }
                             Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
-                                (local_x.abs()) / self.scale.x < t.width / 2.
-                                    && (local_y.abs()) / self.scale.y < t.height / 2.
+                                let offset = self.offset * vec2(t.width, t.height) * self.scale;
+
+                                ((local_x - offset.x).abs()) / self.scale.x < t.width / 2.
+                                    && ((local_y - offset.y).abs()) / self.scale.y < t.height / 2.
                             }
                             Obj2d::None => true,
                         } {

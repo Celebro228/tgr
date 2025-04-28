@@ -333,6 +333,8 @@ fn set_proj() {
     let canvas = get_canvas() / 2. * get_zoom();
     let window = get_window() / 2.;
 
+    let camera = get_camera();
+
     let view: &View = if aspect_window > aspect_canvas {
         get_view_width()
     } else {
@@ -344,32 +346,66 @@ fn set_proj() {
             let scale = canvas.y / (aspect_window / aspect_canvas);
             set_mouse_proj(canvas.x / window.x, scale / window.y);
             set_canvas_proj(canvas.x, scale);
-            Mat4::orthographic_rh_gl(-canvas.x, canvas.x, scale, -scale, -1.0, 1.0)
+            Mat4::orthographic_rh_gl(
+                -canvas.x + camera.x,
+                canvas.x + camera.x,
+                scale + camera.y,
+                -scale + camera.y,
+                -1.0,
+                1.0,
+            )
         }
         View::KeepHeight => {
             let scale = canvas.x / (aspect_canvas / aspect_window);
             set_mouse_proj(scale / window.x, canvas.y / window.y);
             set_canvas_proj(scale, canvas.y);
-            Mat4::orthographic_rh_gl(-scale, scale, canvas.y, -canvas.y, -1.0, 1.0)
+            Mat4::orthographic_rh_gl(
+                -scale + camera.x,
+                scale + camera.x,
+                canvas.y + camera.y,
+                -canvas.y + camera.y,
+                -1.0,
+                1.0,
+            )
         }
         View::Scale => {
             set_mouse_proj(canvas.x / window.x, canvas.y / window.y);
             set_canvas_proj(canvas.x, canvas.y);
-            Mat4::orthographic_rh_gl(-canvas.x, canvas.x, canvas.y, -canvas.y, -1.0, 1.0)
+            Mat4::orthographic_rh_gl(
+                -canvas.x + camera.x,
+                canvas.x + camera.x,
+                canvas.y + camera.y,
+                -canvas.y + camera.y,
+                -1.0,
+                1.0,
+            )
         }
         View::Window => {
             let window = window * get_zoom();
             set_mouse_proj(get_zoom(), get_zoom());
             set_canvas_proj(window.x, window.y);
-            Mat4::orthographic_rh_gl(-window.x, window.x, window.y, -window.y, -1.0, 1.0)
+            Mat4::orthographic_rh_gl(
+                -window.x + camera.x,
+                window.x + camera.x,
+                window.y + camera.y,
+                -window.y + camera.y,
+                -1.0,
+                1.0,
+            )
         }
     };
 
     unsafe { PROJ = proj }
 }
 
-pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: [f32; 4]) {
-    let pos = pos - get_camera();
+pub(crate) fn draw2d(
+    pos: Vec2,
+    obj: &Obj2d,
+    scale: Vec2,
+    rotation: f32,
+    offset: Vec2,
+    color: [f32; 4],
+) {
     match obj {
         Obj2d::None => {}
         Obj2d::Circle(r) => {
@@ -384,10 +420,12 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
                 uv: Vec2::new(0., 0.),
             });
 
+            let offset = offset * r * scale;
+
             for i in 0..segments {
                 let theta = i as f32 / segments as f32 * std::f32::consts::TAU;
-                let x = r * theta.cos() * scale.x;
-                let y = r * theta.sin() * scale.y;
+                let x = r * theta.cos() * scale.x + offset.x;
+                let y = r * theta.sin() * scale.y + offset.y;
                 let p = rotate(vec2(x, y), pos, rotation);
                 vertices.push(Vertex {
                     pos: p,
@@ -410,25 +448,27 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
             let mut vertices: Vec<Vertex> = Vec::new();
             let mut indices: Vec<u16> = Vec::new();
 
+            let offset = offset * vec2(w, h) * scale;
+
             if *r <= 1. {
                 vertices.extend([
                     Vertex {
-                        pos: rotate(vec2(-w, -h), pos, rotation),
+                        pos: rotate(vec2(-w + offset.x, -h + offset.y), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
                     Vertex {
-                        pos: rotate(vec2(w, -h), pos, rotation),
+                        pos: rotate(vec2(w + offset.x, -h + offset.y), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
                     Vertex {
-                        pos: rotate(vec2(w, h), pos, rotation),
+                        pos: rotate(vec2(w + offset.x, h + offset.y), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
                     Vertex {
-                        pos: rotate(vec2(-w, h), pos, rotation),
+                        pos: rotate(vec2(-w + offset.x, h + offset.y), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
@@ -456,8 +496,8 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
                     for i in 0..half_segments {
                         let theta = (corner_index * half_segments + i) as f32 / segments as f32
                             * std::f32::consts::TAU;
-                        let x = center.x + r * theta.cos() * scale.x;
-                        let y = center.y + r * theta.sin() * scale.y;
+                        let x = center.x + r * theta.cos() * scale.x + offset.x;
+                        let y = center.y + r * theta.sin() * scale.y + offset.y;
                         let p = rotate(vec2(x, y), pos, rotation);
                         vertices.push(Vertex {
                             pos: p,
@@ -478,25 +518,28 @@ pub(crate) fn draw2d(pos: Vec2, obj: &Obj2d, scale: Vec2, rotation: f32, color: 
         Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
             let w = (t.width as f32 * scale.x) / 2.;
             let h = (t.height as f32 * scale.y) / 2.;
+
+            let offset = offset * vec2(w, h) * scale;
+
             add_render(
                 vec![
                     Vertex {
-                        pos: rotate(vec2(-w, -h), pos, rotation),
+                        pos: rotate(vec2(-w + offset.x, -h + offset.y), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 0.),
                     },
                     Vertex {
-                        pos: rotate(vec2(w, -h), pos, rotation),
+                        pos: rotate(vec2(w + offset.x, -h + offset.y), pos, rotation),
                         color: color,
                         uv: Vec2::new(1., 0.),
                     },
                     Vertex {
-                        pos: rotate(vec2(w, h), pos, rotation),
+                        pos: rotate(vec2(w + offset.x, h + offset.y), pos, rotation),
                         color: color,
                         uv: Vec2::new(1., 1.),
                     },
                     Vertex {
-                        pos: rotate(vec2(-w, h), pos, rotation),
+                        pos: rotate(vec2(-w + offset.x, h + offset.y), pos, rotation),
                         color: color,
                         uv: Vec2::new(0., 1.),
                     },
@@ -598,11 +641,16 @@ pub(crate) fn add_text(
         .collect();
 
     let (min_x, max_x, min_y, max_y) = {
-        let first = glyphs.first().and_then(|g| g.pixel_bounding_box()).unwrap();
-        let last = glyphs.last().and_then(|g| g.pixel_bounding_box()).unwrap();
+        //let first = glyphs.first().and_then(|g| g.pixel_bounding_box()).unwrap();
+        //let last = glyphs.last().and_then(|g| g.pixel_bounding_box()).unwrap();
 
-        let (mut min_x, mut max_x) = (first.min.x, last.max.x);
-        let (mut min_y, mut max_y) = (first.min.y, last.max.y);
+        //let (mut min_x, mut max_x) = (first.min.x, last.max.x);
+        //let (mut min_y, mut max_y) = (first.min.y, last.max.y);
+
+        let mut min_x = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut min_y = i32::MAX;
+        let mut max_y = i32::MIN;
 
         for g in &glyphs {
             if let Some(bb) = g.pixel_bounding_box() {
@@ -612,8 +660,12 @@ pub(crate) fn add_text(
                 max_y = max_y.max(bb.max.y);
             }
         }
-
-        (min_x, max_x, min_y, max_y)
+    
+        if min_x > max_x || min_y > max_y {
+            (0, 1, 0, 1)
+        } else {
+            (min_x, max_x, min_y, max_y)
+        }
     };
 
     let width = (max_x - min_x) as u32;
