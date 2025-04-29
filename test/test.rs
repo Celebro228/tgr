@@ -12,6 +12,7 @@ impl Module for P {
 
     fn update(&self, obj: &mut Node2d, d: f32) {
         obj.rotation += d as f32 / 10.;
+        obj.set_visible(!obj.get_visible());
     }
 
     fn touch(&self, obj: &mut Node2d, _id: u64, touch: &Touch, pos: Vec2) {
@@ -111,7 +112,8 @@ fn main() {
             .offset(1., 0.),
         //button("ok", "asasdasdd", 500., &font),
         //check("a", 500.)
-        edittext("tok", "hudden", 250., &font) //scroll()
+        //edittext("tok", "hudden", 250., &font).offset(1., 0.), //scroll()
+        line("asd", 0., 0., 500., 500., 100., 10.),
         //joystick
         //button
         //text

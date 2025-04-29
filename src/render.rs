@@ -564,11 +564,30 @@ fn rotate(p: Vec2, center: Vec2, rotation: f32) -> Vec2 {
 }
 
 #[inline(always)]
-fn add_render(vert: Vec<Vertex>, indi: Vec<u16>, img: Option<usize>) {
+fn add_render(mut vert: Vec<Vertex>, mut indi: Vec<u16>, img: Option<usize>) {
     unsafe {
-        RENDERS.push((vert, indi, img));
+        let needs_new_batch = match RENDERS.last() {
+            Some((_, _, last_img)) => *last_img != img,
+            None => true,
+        };
+
+        if needs_new_batch {
+            RENDERS.push((vert, indi, img));
+        } else {
+            let last = RENDERS.last_mut().unwrap();
+            let base_index = last.0.len() as u16;
+
+            // Смещаем индексы на количество уже имеющихся вершин
+            for index in &mut indi {
+                *index += base_index;
+            }
+
+            last.0.extend(vert);
+            last.1.extend(indi);
+        }
     }
 }
+
 
 pub(crate) fn clear_render() {
     unsafe {

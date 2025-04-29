@@ -95,7 +95,7 @@ pub struct Node2d {
     pub color: Rgba,
     pub keep: Keep,
     pub offset: Vec2,
-    pub visible: bool,
+    visible: bool,
     pub(crate) node: Vec<Node2d>,
     pub script: Option<&'static dyn Module>,
     pub hash: HashMap<&'static str, Box<dyn Any + Send + Sync>>,
@@ -173,12 +173,21 @@ impl Node2d {
         self
     }
 
-    pub fn get_parent_position(&mut self) -> Vec2 {
+    pub fn get_parent_position(&self) -> Vec2 {
         self.parent_position
     }
 
     pub fn set_global_position(&mut self, x: f32, y: f32) {
         self.position = vec2(x, y) - self.parent_position;
+    }
+
+    pub fn get_visible(&self) -> bool {
+        self.visible
+    }
+
+    pub fn set_visible(&mut self, sel: bool) {
+        self.visible = sel;
+        set_add_buffer();
     }
 
     #[inline(always)]
@@ -252,17 +261,30 @@ impl Node2d {
 
         self.global_position = self.get_global_position();
 
+        let parrent_pos = self.global_position + match &self.obj {
+            Obj2d::Rect(w, h, _) => {
+                self.offset * vec2(*w, *h) * self.scale / 2.
+            }
+            Obj2d::Circle(r) => {
+                self.offset * r * self.scale / 2.
+            }
+            Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
+                self.offset * vec2(t.width, t.height) * self.scale / 2.
+            }
+            Obj2d::None => vec2(0., 0.),
+        };
+
         for obj in &mut self.node {
-            obj.parent_position = self.global_position;
+            obj.parent_position = parrent_pos;
             obj.update();
         }
     }
 
     pub(crate) fn draw(&mut self, a: f32) {
-        let mut color = self.color.get();
-        color[3] *= a;
-
         if self.visible {
+            let mut color = self.color.get();
+            color[3] *= a;
+            
             draw2d(
                 self.global_position,
                 &self.obj,
@@ -271,10 +293,10 @@ impl Node2d {
                 self.offset,
                 color,
             );
-        }
 
-        for obj in &mut self.node {
-            obj.draw(color[3]);
+            for obj in &mut self.node {
+                obj.draw(color[3]);
+            }
         }
     }
 
@@ -444,6 +466,22 @@ pub fn circle(name: &str, r: f32) -> Node2d {
 pub fn rect(name: &str, w: f32, h: f32, r: f32) -> Node2d {
     Node2d::new(name, Obj2d::Rect(w, h, r))
 }
+
+pub fn line(name: &str, x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, r: f32) -> Node2d {
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+
+    let length = (dx * dx + dy * dy).sqrt();
+    let angle = dy.atan2(dx); // угол между точками
+
+    let center_x = (x1 + x2) / 2.0;
+    let center_y = (y1 + y2) / 2.0;
+
+    Node2d::new(name, Obj2d::Rect(length, thickness, r))
+        .position(center_x, center_y)
+        .rotation(angle)
+}
+
 
 #[inline(always)]
 pub fn image(name: &str, texture: &Texture) -> Node2d {
