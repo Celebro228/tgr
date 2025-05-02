@@ -1,6 +1,9 @@
-use quad_storage::STORAGE;
-use std::any::Any;
+use miniquad::fs;
+use std::{any::Any, sync::{Arc, Mutex}};
 use std::collections::HashMap;
+
+#[cfg(feature = "storage")]
+use quad_storage::STORAGE;
 
 static mut GLOBAL_DATA: Option<HashMap<&'static str, Box<dyn Any + Send + Sync>>> = None;
 static mut GLOBAL_STAT: Option<HashMap<usize, f32>> = None;
@@ -41,15 +44,19 @@ pub fn add_stat(key: usize, value: f32) {
     }
 }
 
+#[cfg(feature = "storage")]
 #[inline(always)]
 pub fn save_data(key: &'static str, value: &'static str) {
     STORAGE.lock().unwrap().set(key, value);
 }
+
+#[cfg(feature = "storage")]
 #[inline(always)]
 pub fn load_data(key: &'static str) -> Option<String> {
     STORAGE.lock().unwrap().get(key)
 }
 
+#[cfg(feature = "storage")]
 #[inline(always)]
 pub fn save_stat(key: usize, value: f32) {
     STORAGE
@@ -57,6 +64,8 @@ pub fn save_stat(key: usize, value: f32) {
         .unwrap()
         .set(&key.to_string(), &value.to_string());
 }
+
+#[cfg(feature = "storage")]
 #[inline(always)]
 pub fn load_stat(key: usize) -> f32 {
     STORAGE
@@ -66,4 +75,28 @@ pub fn load_stat(key: usize) -> f32 {
         .unwrap_or(String::from("0"))
         .parse()
         .unwrap()
+}
+
+pub fn load_file(path: &str) -> Result<Vec<u8>, String> {
+    #[cfg(target_os = "ios")]
+    let _ = std::env::set_current_dir(std::env::current_exe().unwrap().parent().unwrap());
+
+    let contents = Arc::new(Mutex::new(None));
+    let path = path.to_owned();
+
+    {
+        let contents: Arc<Mutex<Option<Result<Vec<u8>, String>>>> = contents.clone();
+
+        fs::load_file(&path, move |bytes| {
+            *contents.lock().expect("Error load file") = Some(bytes.map_err(|_| "oh my god".to_string()));
+        });
+    }
+
+    let contents = contents.lock().expect("Error file lock").take();
+
+    if let Some(contents) = contents {
+        contents
+    } else {
+        Err("Капец".to_string())
+    }
 }

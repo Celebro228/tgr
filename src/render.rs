@@ -5,17 +5,17 @@ use crate::{
         add_fps_buffer, get_add_buffer, get_backgraund, get_camera, get_canvas, get_canvas_update,
         get_fps_buffer, get_fullscreen, get_high_dpi, get_last_fps_time, get_last_frame_time,
         get_view_height, get_view_width, get_window, get_window_resizable, get_window_update,
-        get_zoom, set_canvas_proj, set_delta, set_fps, set_fps_buffer, set_last_fps_time,
-        set_last_frame_time, set_mouse, set_mouse_d, set_mouse_wheel_d, set_window_2, Engine, Key,
-        Obj2d, View,
+        get_zoom, load_file, set_canvas_proj, set_delta, set_fps, set_fps_buffer,
+        set_last_fps_time, set_last_frame_time, set_mouse, set_mouse_d, set_mouse_wheel_d,
+        set_window_2, Engine, Key, Obj2d, View, TAU,
     },
     info::DEVICE,
     object::Touch,
 };
-use glam::{mat4, vec2, Mat4, Vec2, Vec3};
-use image::{DynamicImage, GenericImageView, ImageBuffer};
+use glam::{vec2, vec3, Mat4, Vec2, Vec3};
+use image::{DynamicImage, GenericImageView};
 use miniquad::{window::set_window_size, *};
-use rusttype::{point, Font, Point, Scale};
+use rusttype::{point, Font, Scale};
 
 static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> = Vec::new();
 
@@ -31,7 +31,7 @@ static mut MOUSE_PROJ: Vec2 = Vec2::new(0., 0.);
 
 #[repr(C)]
 struct Vertex {
-    pos: Vec2,
+    pos: Vec3,
     color: [f32; 4],
     uv: Vec2,
 }
@@ -68,12 +68,12 @@ impl QuadRender {
                 },
                 shader::meta(),
             )
-            .unwrap();
+            .expect("Error to load shaders");
 
         let pipeline = ctx.new_pipeline(
             &[BufferLayout::default()],
             &[
-                VertexAttribute::new("in_pos", VertexFormat::Float2),
+                VertexAttribute::new("in_pos", VertexFormat::Float3),
                 VertexAttribute::new("in_color", VertexFormat::Float4),
                 VertexAttribute::new("in_uv", VertexFormat::Float2),
             ],
@@ -415,7 +415,7 @@ pub(crate) fn draw2d(
             let segments = 40;
 
             vertices.push(Vertex {
-                pos: vec2(pos.x, pos.y),
+                pos: vec3(pos.x, pos.y, 0.),
                 color,
                 uv: Vec2::new(0., 0.),
             });
@@ -423,7 +423,7 @@ pub(crate) fn draw2d(
             let offset = offset * r * scale;
 
             for i in 0..segments {
-                let theta = i as f32 / segments as f32 * std::f32::consts::TAU;
+                let theta = i as f32 / segments as f32 * TAU;
                 let x = r * theta.cos() * scale.x + offset.x;
                 let y = r * theta.sin() * scale.y + offset.y;
                 let p = rotate(vec2(x, y), pos, rotation);
@@ -487,15 +487,15 @@ pub(crate) fn draw2d(
                 ];
 
                 vertices.push(Vertex {
-                    pos: vec2(pos.x, pos.y),
+                    pos: vec3(pos.x, pos.y, 0.),
                     color,
                     uv: Vec2::new(0., 0.),
                 });
 
                 for (corner_index, &center) in corner_centers.iter().enumerate() {
                     for i in 0..half_segments {
-                        let theta = (corner_index * half_segments + i) as f32 / segments as f32
-                            * std::f32::consts::TAU;
+                        let theta =
+                            (corner_index * half_segments + i) as f32 / segments as f32 * TAU;
                         let x = center.x + r * theta.cos() * scale.x + offset.x;
                         let y = center.y + r * theta.sin() * scale.y + offset.y;
                         let p = rotate(vec2(x, y), pos, rotation);
@@ -552,14 +552,18 @@ pub(crate) fn draw2d(
 }
 
 #[inline(always)]
-fn rotate(p: Vec2, center: Vec2, rotation: f32) -> Vec2 {
+fn rotate(p: Vec2, center: Vec2, rotation: f32) -> Vec3 {
     if rotation != 0. {
         let s = rotation.sin();
         let c = rotation.cos();
 
-        vec2(p.x * c - p.y * s, p.x * s + p.y * c) + center
+        vec3(
+            (p.x * c - p.y * s) + center.x,
+            (p.x * s + p.y * c) + center.y,
+            0.,
+        )
     } else {
-        p + center
+        vec3(p.x + center.x, p.y + center.y, 0.)
     }
 }
 
@@ -588,7 +592,6 @@ fn add_render(mut vert: Vec<Vertex>, mut indi: Vec<u16>, img: Option<usize>) {
     }
 }
 
-
 pub(crate) fn clear_render() {
     unsafe {
         RENDERS.clear();
@@ -601,7 +604,7 @@ fn get_render() -> &'static Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> {
 }
 
 pub(crate) fn get_font(path: &str) -> usize {
-    let file = std::fs::read(path).unwrap();
+    let file = load_file(path).expect("Error to loading font");
     let file: &'static [u8] = Box::leak(file.into_boxed_slice());
     let font = Font::try_from_bytes(&file).expect("Error font bytes");
 
@@ -629,7 +632,9 @@ fn upd_texture_buffer(id: usize, rgba: Vec<u8>, width: u32, height: u32) -> (usi
 
 #[inline(always)]
 pub(crate) fn add_texture(path: &str) -> (usize, f32, f32) {
-    let img = image::open(path).expect("Error to load texture");
+    let img = image::load_from_memory(&load_file(path).expect("Error to loading texture"))
+        .expect("Error to convert bytes from image");
+    //let img = image::open(path).expect("Error to load texture");
 
     let rgba = img.to_rgba8().to_vec();
     let (width, height) = img.dimensions();
@@ -679,7 +684,7 @@ pub(crate) fn add_text(
                 max_y = max_y.max(bb.max.y);
             }
         }
-    
+
         if min_x > max_x || min_y > max_y {
             (0, 1, 0, 1)
         } else {
@@ -729,7 +734,7 @@ mod shader {
     use miniquad::*;
 
     pub const VERTEX: &str = r#"#version 100
-    attribute vec2 in_pos;
+    attribute vec3 in_pos;
     attribute vec4 in_color;
     attribute vec2 in_uv;
 
@@ -739,7 +744,7 @@ mod shader {
     uniform mat4 mvp;
 
     void main() {
-        gl_Position = mvp * vec4(in_pos, 0, 1);
+        gl_Position = mvp * vec4(in_pos, 1);
         color = in_color;
         uv = in_uv;
     }"#;
@@ -761,29 +766,32 @@ mod shader {
 
     struct Vertex
     {
-        float2 in_pos   [[attribute(0)]];
+        float3 in_pos   [[attribute(0)]];
         float4 in_color [[attribute(1)]];
+        float2 in_uv    [[attribute(2)]];
     };
 
     struct RasterizerData
     {
         float4 position [[position]];
         float4 color [[user(locn0)]];
+        float2 uv [[user(locn1)]];
     };
 
-    vertex RasterizerData vertexShader(Vertex v [[stage_in]])
+    vertex RasterizerData vertexShader(Vertex v [[stage_in]], constant Uniforms& uniforms [[buffer(0)]])
     {
         RasterizerData out;
 
-        out.position = float4(v.in_pos.xy, 0.0, 1.0);
+        out.position = uniforms.mvp * float4(v.in_pos, 1.0);
         out.color = v.in_color;
+        out.uv = v.in_uv;
 
         return out;
     }
 
-    fragment float4 fragmentShader(RasterizerData in [[stage_in]])
+    fragment float4 fragmentShader(RasterizerData in [[stage_in]], texture2d<float> tex [[texture(0)]], sampler texSmplr [[sampler(0)]])
     {
-        return in.color;
+        return in.color * tex.sample(texSmplr, in.uv);
     }"#;
 
     pub fn meta() -> ShaderMeta {

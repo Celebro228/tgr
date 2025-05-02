@@ -2,19 +2,23 @@ use miniquad::KeyMods;
 
 pub use std::f32::consts::{PI, TAU};
 
-pub use crate::audio::*;
 pub use crate::data::*;
 pub use crate::info;
 pub use crate::object::*;
 pub use crate::physic::*;
 pub use crate::render::*;
-pub use crate::widgets::*;
 
 pub use miniquad::date;
 pub use Keep::*;
 pub use Key::*;
 pub use Touch::*;
 pub use View::*;
+
+#[cfg(feature = "audio")]
+pub use crate::audio::*;
+
+#[cfg(feature = "widgets")]
+pub use crate::widgets::*;
 
 pub const BLACK: Rgba = Rgba::new(0., 0., 0., 1.0);
 

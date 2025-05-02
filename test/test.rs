@@ -49,7 +49,7 @@ impl Module for C {
         //let num= get_data::<u8>("num").unwrap();
 
         add_stat(0, 1.);
-        save_stat(0, *get_stat(0));
+        //save_stat(0, *get_stat(0));
 
         //println!("{}", get_stat(0));
 
@@ -76,12 +76,13 @@ impl Module for SCENE {
 }
 
 fn main() {
-    set_data("ok", audio("./test/test.ogg"));
+    //set_data("ok", audio("./test/test.ogg"));
+
     set_data("num", 0u8);
 
-    set_stat(0, load_stat(0));
+    set_stat(0, 0.); //load_stat(0));
 
-    let font = font("./test/calibri.ttf");
+    let font = font("calibri.ttf");
 
     let o = String::from("ok");
     let s = node2d![
@@ -132,6 +133,7 @@ fn main() {
         .view(KeepHeight, KeepWidth)
         //.camera(100., 0.)
         .zoom(2.)
+        .backgraund(rgba(0, 0, 0, 0.2))
         //.mouse(KEEP_IN)
         //.touch_in_mouse(false)
         //.backgraund()

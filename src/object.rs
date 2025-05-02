@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::engine::{
     add_text, add_texture, draw2d, get_camera, get_canvas_proj, get_delta, get_font, get_touch,
     set_add_buffer, set_touch,
@@ -7,7 +5,7 @@ use crate::engine::{
 
 pub use glam::{vec2, Vec2};
 use miniquad::{KeyCode, KeyMods};
-use std::any::Any;
+use std::{any::Any, collections::HashMap};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Rgba {
@@ -224,6 +222,24 @@ impl Node2d {
         None
     }
 
+    pub fn del_node(&mut self, name: &str) -> Result<Node2d, String> {
+        let name = name.to_string();
+        let mut del_id: Option<usize> = None;
+
+        for (i, obj) in self.node.iter().enumerate() {
+            if obj.name == name {
+                del_id = Some(i);
+                break;
+            }
+        }
+
+        if let Some(id) = del_id {
+            Ok(self.node.remove(id))
+        } else {
+            Err(format!("Not found object ({})", name))
+        }
+    }
+
     pub fn add_node(&mut self, node: Vec<Node2d>) {
         self.node.extend(node);
         set_add_buffer();
@@ -261,18 +277,15 @@ impl Node2d {
 
         self.global_position = self.get_global_position();
 
-        let parrent_pos = self.global_position + match &self.obj {
-            Obj2d::Rect(w, h, _) => {
-                self.offset * vec2(*w, *h) * self.scale / 2.
-            }
-            Obj2d::Circle(r) => {
-                self.offset * r * self.scale / 2.
-            }
-            Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
-                self.offset * vec2(t.width, t.height) * self.scale / 2.
-            }
-            Obj2d::None => vec2(0., 0.),
-        };
+        let parrent_pos = self.global_position
+            + match &self.obj {
+                Obj2d::Rect(w, h, _) => self.offset * vec2(*w, *h) * self.scale / 2.,
+                Obj2d::Circle(r) => self.offset * r * self.scale / 2.,
+                Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
+                    self.offset * vec2(t.width, t.height) * self.scale / 2.
+                }
+                Obj2d::None => vec2(0., 0.),
+            };
 
         for obj in &mut self.node {
             obj.parent_position = parrent_pos;
@@ -284,7 +297,7 @@ impl Node2d {
         if self.visible {
             let mut color = self.color.get();
             color[3] *= a;
-            
+
             draw2d(
                 self.global_position,
                 &self.obj,
@@ -481,7 +494,6 @@ pub fn line(name: &str, x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, r: f
         .position(center_x, center_y)
         .rotation(angle)
 }
-
 
 #[inline(always)]
 pub fn image(name: &str, texture: &Texture) -> Node2d {

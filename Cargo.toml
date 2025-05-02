@@ -1,6 +1,6 @@
 [package]
 name = "tgr"
-version = "3.0.7"
+version = "3.0.8"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Игровой движок на Rust"
@@ -15,13 +15,17 @@ authors = ["Argus"]
 # inventory = "0.3"
 # tgr_macro = { path = "tgr_macro" }
 miniquad = { version = "0.4.8" }
-glam = "0.30.1"
+glam = "0.30.3"
 image =  { version = "0.25.6", default-features = false, features = ["png", "jpeg"] }
 rusttype = "0.9.3"
-quad-snd = "0.2.8"
-quad-storage = "0.1.3"
+quad-snd = { version = "0.2.8", optional = true }
+quad-storage = { version = "0.1.3", optional = true }
 
 [features]
+default = ["widgets", "audio", "storage"]
+audio = ["quad-snd"]
+widgets = []
+storage = ["quad-storage"]
 # default = ["miniquad"]
 # miniquad = ["dep:miniquad"]
 
@@ -53,7 +57,7 @@ strip = true
 
 [package.metadata.android]
 fullscreen = true
-build_targets = [ "armv7-linux-androideabi" ]
+# build_targets = [ "armv7-linux-androideabi" ]
 
 # [apk.signing]
 # key_path = "debug.keystore"

@@ -1,4 +1,4 @@
-use crate::engine::{circle, rect, text, vec2, Font, Module, Node2d, Obj2d, Rgba, Touch, Vec2, Key};
+use crate::engine::{circle, rect, text, vec2, Font, Module, Node2d, Obj2d, Rgba, Touch, Vec2}; // Key};
 use crate::object::Touch::*;
 
 struct Button;
@@ -90,7 +90,7 @@ pub fn check(name: &str, size: f32) -> Node2d {
         .hash("check", false) //.hash("posx", 0.)
 }
 
-struct EditText;
+/*struct EditText;
 impl Module for EditText {
     fn touch(&self, obj: &mut Node2d, _id: u64, touch: &crate::engine::Touch, _pos: glam::Vec2) {
         match touch {
@@ -149,4 +149,4 @@ pub fn edittext(name: &str, tex: &str, size: f32, font: &Font) -> Node2d {
         .script(&EditText)
         .hash("text", String::from(tex))
         .hash("online", false)
-}
+}*/
