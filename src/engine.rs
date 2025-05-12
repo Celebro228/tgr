@@ -1,75 +1,45 @@
-use miniquad::KeyMods;
+use crate::{
+    object::{
+        d2::{Node2d, ON_TOUCH},
+        Touch,
+    },
+    render::{
+        d2::{
+            upd_proj, CAMERA, CANVAS, CANVAS_UPDATE, RENDERS, UPD_RENDER_BUFFER, VIEW_HEIGHT,
+            VIEW_WIDTH, ZOOM,
+        },
+        Rgba, View, FPS, FPS_BUFFER, LAST_FPS_TIME, LAST_FRAME_TIME, WINDOW, WINDOW_UPDATE,
+    },
+};
 
-pub use std::f32::consts::{PI, TAU};
+#[cfg(feature = "miniquad")]
+use crate::render::miniquad::render;
 
-pub use crate::data::*;
-pub use crate::info;
-pub use crate::object::*;
-pub use crate::physic::*;
-pub use crate::render::*;
+#[cfg(feature = "wgpu")]
+use crate::render::wgpu::render;
 
-pub use miniquad::date;
-pub use Keep::*;
-pub use Key::*;
-pub use Touch::*;
-pub use View::*;
-
-#[cfg(feature = "audio")]
-pub use crate::audio::*;
-
-#[cfg(feature = "widgets")]
-pub use crate::widgets::*;
+use glam::{vec2, Vec2};
 
 pub const BLACK: Rgba = Rgba::new(0., 0., 0., 1.0);
 
-static mut WINDOW: Vec2 = Vec2::new(1280., 720.);
-static mut WINDOW_UPDATE: bool = false;
+pub(crate) static mut BACKGRAUND: Rgba = BLACK;
 
-static mut CANVAS: Vec2 = Vec2::new(1280., 720.);
-static mut CANVAS_UPDATE: bool = false;
-static mut CANVAS_PROJ: Vec2 = Vec2::new(1280. / 2., 720. / 2.);
-
-static mut VIEW_WIDTH: View = View::KeepHeight;
-static mut VIEW_HEIGHT: View = View::KeepWidth;
-
-static mut ADD_BUFFER: bool = true;
-
-static mut BACKGRAUND: Rgba = BLACK;
-static mut CAMERA: Vec2 = Vec2::new(0., 0.);
-static mut ZOOM: f32 = 1.;
-
-static mut RESIZABLE: bool = true;
-static mut FULLSCREEN: bool = false;
-static mut HIGH_DPI: bool = true;
+pub(crate) static mut RESIZABLE: bool = true;
+pub(crate) static mut FULLSCREEN: bool = false;
+pub(crate) static mut HIGH_DPI: bool = true;
 
 //static mut SCRIPT: Option<&'static dyn Module> = None;
 static mut NODE2D: Option<Node2d> = None;
 
-static mut DELTA: f32 = 0.;
-static mut LAST_FRAME_TIME: f64 = 0.;
-
-static mut MOUSE: Vec2 = Vec2::new(0., 0.);
-static mut MOUSE_DELTA: Vec2 = Vec2::new(0., 0.);
-static mut MOUSE_WHEEL_DELTA: Vec2 = Vec2::new(0., 0.);
-
-static mut TOUCH: bool = false;
-
-static mut FPS: u16 = 60;
-static mut FPS_BUFFER: u16 = 0;
-static mut LAST_FPS_TIME: f64 = 0.;
-
-pub enum View {
-    KeepWidth,
-    KeepHeight,
-    Scale,
-    Window,
-}
+pub(crate) static mut MOUSE: Vec2 = Vec2::new(0., 0.);
+pub(crate) static mut MOUSE_DELTA: Vec2 = Vec2::new(0., 0.);
+pub(crate) static mut MOUSE_WHEEL_DELTA: Vec2 = Vec2::new(0., 0.);
 
 pub struct Engine;
 
 impl Engine {
     pub fn start(self, name: &str) -> Self {
-        Render::start(name);
+        render(name);
         self
     }
 
@@ -81,26 +51,45 @@ impl Engine {
         }
     }
 
-    pub(crate) fn draw2d() {
+    pub(crate) fn draw() {
         unsafe {
+            MOUSE_DELTA = Vec2::ZERO;
+            MOUSE_WHEEL_DELTA = Vec2::ZERO;
+
+            RENDERS.clear();
+
+            if CANVAS_UPDATE {
+                CANVAS_UPDATE = false;
+                upd_proj();
+            }
+
+            FPS_BUFFER += 1;
+
+            if LAST_FPS_TIME <= LAST_FRAME_TIME {
+                FPS = FPS_BUFFER;
+                FPS_BUFFER = 0;
+                LAST_FPS_TIME = LAST_FRAME_TIME + 1.;
+            }
+
             if let Some(node) = &mut NODE2D {
+                node.global_position = -CAMERA;
                 node.draw(1.);
             }
         }
     }
 
-    pub(crate) fn key(&mut self, key: &Key, keymod: KeyMods, touch: &Touch) {
+    /*pub(crate) fn key(&mut self, key: &Key, keymod: KeyMods, touch: &Touch) {
         unsafe {
             if let Some(node) = &mut NODE2D {
                 node.key(&key, keymod, touch);
             }
         }
-    }
+    }*/
 
     pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
         unsafe {
             if let Some(node) = &mut NODE2D {
-                set_touch(true);
+                ON_TOUCH = true;
                 node.touch(id, touch, pos);
             }
         }
@@ -125,7 +114,9 @@ impl Engine {
     }*/
 
     pub fn window(self, x: f32, y: f32) -> Self {
-        set_window_2(x, y);
+        unsafe {
+            WINDOW = vec2(x, y);
+        }
         self
     }
 
@@ -184,10 +175,6 @@ impl Engine {
 }
 
 #[inline(always)]
-pub fn get_window() -> Vec2 {
-    unsafe { WINDOW }
-}
-#[inline(always)]
 pub(crate) fn get_window_update() -> bool {
     unsafe {
         if WINDOW_UPDATE == true {
@@ -203,17 +190,8 @@ pub fn set_window(x: f32, y: f32) {
     unsafe {
         WINDOW = vec2(x, y);
         WINDOW_UPDATE = true;
+        CANVAS_UPDATE = true;
     }
-}
-#[inline(always)]
-pub(crate) fn set_window_2(x: f32, y: f32) {
-    unsafe {
-        WINDOW = vec2(x, y);
-    }
-}
-#[inline(always)]
-pub fn get_canvas() -> Vec2 {
-    unsafe { CANVAS }
 }
 #[inline(always)]
 pub fn set_canvas(x: f32, y: f32) {
@@ -234,35 +212,10 @@ pub(crate) fn get_canvas_update() -> bool {
     }
 }
 #[inline(always)]
-pub(crate) fn set_canvas_proj(x: f32, y: f32) {
-    unsafe {
-        CANVAS_PROJ = vec2(x, y);
-    }
-}
-#[inline(always)]
-pub fn get_canvas_proj() -> Vec2 {
-    unsafe { CANVAS_PROJ }
-}
-
-#[inline(always)]
-pub fn get_view_width() -> &'static View {
-    unsafe { &VIEW_WIDTH }
-}
-#[inline(always)]
-pub fn get_view_height() -> &'static View {
-    unsafe { &VIEW_HEIGHT }
-}
-#[inline(always)]
-pub(crate) fn set_add_buffer() {
-    unsafe {
-        ADD_BUFFER = true;
-    }
-}
-#[inline(always)]
 pub(crate) fn get_add_buffer() -> bool {
     unsafe {
-        if ADD_BUFFER {
-            ADD_BUFFER = false;
+        if UPD_RENDER_BUFFER {
+            UPD_RENDER_BUFFER = false;
             true
         } else {
             false
@@ -271,14 +224,6 @@ pub(crate) fn get_add_buffer() -> bool {
 }
 
 #[inline(always)]
-pub fn get_backgraund() -> &'static Rgba {
-    unsafe { &BACKGRAUND }
-}
-#[inline(always)]
-pub fn get_camera() -> Vec2 {
-    unsafe { CAMERA }
-}
-#[inline(always)]
 pub fn set_camera(x: f32, y: f32) {
     unsafe {
         CAMERA = vec2(x, y);
@@ -286,128 +231,15 @@ pub fn set_camera(x: f32, y: f32) {
     }
 }
 #[inline(always)]
-pub fn get_zoom() -> f32 {
-    unsafe { ZOOM }
+pub fn get_camera() -> Vec2 {
+    unsafe {
+        CAMERA
+    }
 }
 #[inline(always)]
 pub fn set_zoom(n: f32) {
     unsafe {
         ZOOM = n;
         CANVAS_UPDATE = true;
-    }
-}
-
-#[inline(always)]
-pub fn get_window_resizable() -> bool {
-    unsafe { RESIZABLE }
-}
-#[inline(always)]
-pub fn get_fullscreen() -> bool {
-    unsafe { FULLSCREEN }
-}
-#[inline(always)]
-pub fn get_high_dpi() -> bool {
-    unsafe { HIGH_DPI }
-}
-
-#[inline(always)]
-pub fn get_mouse() -> Vec2 {
-    unsafe { MOUSE }
-}
-#[inline(always)]
-pub(crate) fn set_mouse(x: f32, y: f32) {
-    unsafe {
-        MOUSE = vec2(x, y);
-    }
-}
-
-#[inline(always)]
-pub fn get_mouse_d() -> Vec2 {
-    unsafe { MOUSE_DELTA }
-}
-#[inline(always)]
-pub(crate) fn set_mouse_d(x: f32, y: f32) {
-    unsafe {
-        MOUSE_DELTA = vec2(x, y);
-    }
-}
-
-#[inline(always)]
-pub fn get_mouse_wheel_d() -> Vec2 {
-    unsafe { MOUSE_WHEEL_DELTA }
-}
-#[inline(always)]
-pub(crate) fn set_mouse_wheel_d(x: f32, y: f32) {
-    unsafe {
-        MOUSE_WHEEL_DELTA = vec2(x, y);
-    }
-}
-
-#[inline(always)]
-pub(crate) fn get_touch() -> bool {
-    unsafe { TOUCH }
-}
-#[inline(always)]
-pub(crate) fn set_touch(sel: bool) {
-    unsafe {
-        TOUCH = sel;
-    }
-}
-
-#[inline(always)]
-pub(crate) fn get_delta() -> f32 {
-    unsafe { DELTA }
-}
-#[inline(always)]
-pub(crate) fn set_delta(delta: f32) {
-    unsafe {
-        DELTA = delta;
-    }
-}
-#[inline(always)]
-pub(crate) fn get_last_frame_time() -> f64 {
-    unsafe { LAST_FRAME_TIME }
-}
-#[inline(always)]
-pub(crate) fn set_last_frame_time(time: f64) {
-    unsafe {
-        LAST_FRAME_TIME = time;
-    }
-}
-
-#[inline(always)]
-pub fn get_fps() -> u16 {
-    unsafe { FPS }
-}
-#[inline(always)]
-pub(crate) fn set_fps(fps: u16) {
-    unsafe {
-        FPS = fps;
-    }
-}
-#[inline(always)]
-pub(crate) fn get_fps_buffer() -> u16 {
-    unsafe { FPS_BUFFER }
-}
-#[inline(always)]
-pub(crate) fn set_fps_buffer(fps: u16) {
-    unsafe {
-        FPS_BUFFER = fps;
-    }
-}
-#[inline(always)]
-pub(crate) fn add_fps_buffer(fps: u16) {
-    unsafe {
-        FPS_BUFFER += fps;
-    }
-}
-#[inline(always)]
-pub(crate) fn get_last_fps_time() -> f64 {
-    unsafe { LAST_FPS_TIME }
-}
-#[inline(always)]
-pub(crate) fn set_last_fps_time(time: f64) {
-    unsafe {
-        LAST_FPS_TIME = time;
     }
 }

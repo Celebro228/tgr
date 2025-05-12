@@ -1,38 +1,14 @@
-use crate::engine::{
-    add_text, add_texture, draw2d, get_camera, get_canvas_proj, get_delta, get_font, get_touch,
-    set_add_buffer, set_touch,
+use super::{Keep, Touch};
+use crate::render::{
+    add_text,
+    d2::{draw, CAMERA, CANVAS_PROJ, TOUCH, UPD_RENDER_BUFFER},
+    rgb, Font, Rgba, Texture, DELTA,
 };
 
-pub use glam::{vec2, Vec2};
-use miniquad::{KeyCode, KeyMods};
+use glam::{vec2, Vec2};
 use std::{any::Any, collections::HashMap};
 
-#[derive(Debug, Clone, Copy)]
-pub struct Rgba {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
-}
-
-impl Rgba {
-    pub const fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self { r, g, b, a }
-    }
-
-    pub fn get(&self) -> [f32; 4] {
-        [self.r, self.g, self.b, self.a]
-    }
-}
-
-pub struct Font {
-    pub(crate) id: usize,
-}
-pub struct Texture {
-    pub(crate) id: usize,
-    pub width: f32,
-    pub height: f32,
-}
+pub(crate) static mut ON_TOUCH: bool = false;
 
 pub enum Obj2d {
     None,
@@ -56,30 +32,6 @@ impl Obj2d {
             panic!("Not a Text object!")
         }
     }
-}
-
-pub enum Keep {
-    Canvas,
-    Center,
-    Up,
-    Down,
-    Left,
-    Right,
-    LeftUp,
-    LeftDown,
-    RightUp,
-    RightDown,
-}
-
-pub enum Touch {
-    Press,
-    Relese,
-    Move,
-}
-
-pub enum Key {
-    Char(char),
-    Code(KeyCode),
 }
 
 pub struct Node2d {
@@ -185,29 +137,23 @@ impl Node2d {
 
     pub fn set_visible(&mut self, sel: bool) {
         self.visible = sel;
-        set_add_buffer();
+        unsafe { UPD_RENDER_BUFFER = true }
     }
 
     #[inline(always)]
     pub fn get_global_position(&mut self) -> Vec2 {
-        match self.keep {
-            Keep::Canvas => self.parent_position + self.position,
-            Keep::Center => get_camera() + self.position,
-            Keep::Up => get_camera() + self.position + vec2(0., -get_canvas_proj().y),
-            Keep::Down => get_camera() + self.position + vec2(0., get_canvas_proj().y),
-            Keep::Left => get_camera() + self.position + vec2(-get_canvas_proj().x, 0.),
-            Keep::Right => get_camera() + self.position + vec2(get_canvas_proj().x, 0.),
-            Keep::LeftUp => {
-                get_camera() + self.position + vec2(-get_canvas_proj().x, -get_canvas_proj().y)
-            }
-            Keep::LeftDown => {
-                get_camera() + self.position + vec2(-get_canvas_proj().x, get_canvas_proj().y)
-            }
-            Keep::RightUp => {
-                get_camera() + self.position + vec2(get_canvas_proj().x, -get_canvas_proj().y)
-            }
-            Keep::RightDown => {
-                get_camera() + self.position + vec2(get_canvas_proj().x, get_canvas_proj().y)
+        unsafe {
+            match self.keep {
+                Keep::Canvas => self.parent_position + self.position,
+                Keep::Center => CAMERA + self.position,
+                Keep::Up => CAMERA + self.position + vec2(0., -CANVAS_PROJ.y),
+                Keep::Down => CAMERA + self.position + vec2(0., CANVAS_PROJ.y),
+                Keep::Left => CAMERA + self.position + vec2(-CANVAS_PROJ.x, 0.),
+                Keep::Right => CAMERA + self.position + vec2(CANVAS_PROJ.x, 0.),
+                Keep::LeftUp => CAMERA + self.position - CANVAS_PROJ,
+                Keep::LeftDown => CAMERA + self.position + vec2(-CANVAS_PROJ.x, CANVAS_PROJ.y),
+                Keep::RightUp => CAMERA + self.position + vec2(CANVAS_PROJ.x, -CANVAS_PROJ.y),
+                Keep::RightDown => CAMERA + self.position + CANVAS_PROJ,
             }
         }
     }
@@ -242,7 +188,7 @@ impl Node2d {
 
     pub fn add_node(&mut self, node: Vec<Node2d>) {
         self.node.extend(node);
-        set_add_buffer();
+        unsafe { UPD_RENDER_BUFFER = true }
     }
 
     pub fn set_hash<T: 'static + Send + Sync>(&mut self, key: &'static str, value: T) {
@@ -272,7 +218,7 @@ impl Node2d {
 
     pub(crate) fn update(&mut self) {
         if let Some(s) = self.script {
-            s.update(self, get_delta());
+            s.update(self, unsafe { DELTA });
         }
 
         self.global_position = self.get_global_position();
@@ -298,7 +244,7 @@ impl Node2d {
             let mut color = self.color.get();
             color[3] *= a;
 
-            draw2d(
+            draw(
                 self.global_position,
                 &self.obj,
                 self.scale,
@@ -313,7 +259,7 @@ impl Node2d {
         }
     }
 
-    pub(crate) fn key(&mut self, key: &Key, keymod: KeyMods, touch: &Touch) {
+    /*pub(crate) fn key(&mut self, key: &Key, keymod: KeyMods, touch: &Touch) {
         if let Some(s) = self.script {
             s.key(self, &key, keymod, touch);
         }
@@ -321,18 +267,18 @@ impl Node2d {
         for obj in &mut self.node {
             obj.key(&key, keymod, touch);
         }
-    }
+    }*/
 
     pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
         for obj in &mut self.node.iter_mut().rev() {
-            if get_touch() {
+            if unsafe { TOUCH } {
                 obj.touch(id, touch, pos);
             } else {
                 break;
             }
         }
 
-        if get_touch() {
+        if unsafe { TOUCH } {
             if let Some(s) = self.script {
                 if match touch {
                     Touch::Press => {
@@ -355,6 +301,10 @@ impl Node2d {
                             }
                             Obj2d::Circle(r) => {
                                 let offset = self.offset * r * self.scale;
+
+                                println!("{}", (((local_x - offset.x) / self.scale.x).powi(2)
+                                    + ((local_y - offset.y) / self.scale.y).powi(2))
+                                .sqrt());
 
                                 (((local_x - offset.x) / self.scale.x).powi(2)
                                     + ((local_y - offset.y) / self.scale.y).powi(2))
@@ -385,89 +335,14 @@ impl Node2d {
                     }
                     Touch::Move => self.touch_id == Some(id),
                 } {
-                    set_touch(false);
+                    unsafe {
+                        TOUCH = false;
+                    }
                     s.touch(self, id, touch, pos);
                 }
             }
         }
     }
-}
-
-#[inline(always)]
-pub fn rgb(r: u8, g: u8, b: u8) -> Rgba {
-    Rgba {
-        r: r as f32 / 255.,
-        g: g as f32 / 255.,
-        b: b as f32 / 255.,
-        a: 1.,
-    }
-}
-#[inline(always)]
-pub fn rgba(r: u8, g: u8, b: u8, a: f32) -> Rgba {
-    Rgba {
-        r: r as f32 / 255.,
-        g: g as f32 / 255.,
-        b: b as f32 / 255.,
-        a,
-    }
-}
-
-pub fn hsv(h: f32, s: f32, v: f32) -> Rgba {
-    let c = v * s;
-    let h = h / 60.;
-    let x = c * (1. - ((h % 2.) - 1.).abs());
-    let m = v - s;
-
-    let (r, g, b) = match h as u32 {
-        0 => (c, x, 0.),
-        1 => (x, c, 0.),
-        2 => (0., c, x),
-        3 => (0., x, c),
-        4 => (x, 0., c),
-        5 => (c, 0., x),
-        _ => (0., 0., 0.), // fallback, например если h = NaN
-    };
-
-    Rgba {
-        r: r + m,
-        g: g + m,
-        b: b + m,
-        a: 1.,
-    }
-}
-
-#[inline(always)]
-pub fn font(path: &str) -> Font {
-    let id = get_font(path);
-    Font { id }
-}
-
-#[inline(always)]
-pub fn texture(path: &str) -> Texture {
-    let (id, w, h) = add_texture(path);
-    Texture {
-        id,
-        width: w,
-        height: h,
-    }
-}
-
-#[inline(always)]
-pub fn text(name: &str, text: &str, size: f32, font: &Font) -> Node2d {
-    let (id, w, h) = add_text(text, size, font.id, None);
-    Node2d::new(
-        name,
-        Obj2d::Text(
-            text.to_string(),
-            size,
-            font.id,
-            Texture {
-                id,
-                width: w,
-                height: h,
-            },
-        ),
-    )
 }
 
 #[inline(always)]
@@ -507,12 +382,32 @@ pub fn image(name: &str, texture: &Texture) -> Node2d {
     )
 }
 
+#[inline(always)]
+pub fn text(name: &str, text: &str, size: f32, font: &Font) -> Node2d {
+    let (id, w, h) = add_text(text, size, font.id, None);
+    Node2d::new(
+        name,
+        Obj2d::Text(
+            text.to_string(),
+            size,
+            font.id,
+            Texture {
+                id,
+                width: w,
+                height: h,
+            },
+        ),
+    )
+}
+
 pub trait Module {
     fn start(&self, _obj: &mut Node2d) {}
     fn update(&self, _obj: &mut Node2d, _d: f32) {}
-    fn key(&self, _obj: &mut Node2d, _key: &Key, _keymod: KeyMods, _touch: &Touch) {}
+    //fn key(&self, _obj: &mut Node2d, _key: &Key, _keymod: KeyMods, _touch: &Touch) {}
     fn touch(&self, _obj: &mut Node2d, _id: u64, _touch: &Touch, _pos: Vec2) {
-        set_touch(true);
+        unsafe {
+            TOUCH = true;
+        }
     }
 }
 
@@ -521,19 +416,7 @@ macro_rules! node2d {
     ( $( $x:expr ),* $(,)? ) => {
         {
             let children = vec![$($x),*];
-            $crate::object::Node2d::new("", $crate::object::Obj2d::None).node(children)
+            $crate::object::d2::Node2d::new("", $crate::object::d2::Obj2d::None).node(children)
         }
     };
 }
-
-/*use inventory;
-
-pub use tgr_macro::module;
-
-inventory::collect!(&'static dyn Module);
-
-pub fn start_all() {
-    for module in inventory::iter::<&'static dyn Module> {
-        module.start();
-    }
-}*/

@@ -1,9 +1,11 @@
-use crate::engine::{circle, rect, text, vec2, Font, Module, Node2d, Obj2d, Rgba, Touch, Vec2}; // Key};
 use crate::object::Touch::*;
+use crate::prelude::{circle, rect, text, Font, Module, Node2d, Obj2d, Rgba, Touch}; // Key};
+
+use glam::{vec2, Vec2};
 
 struct Button;
 impl Module for Button {
-    fn touch(&self, obj: &mut Node2d, _id: u64, touch: &crate::engine::Touch, _pos: Vec2) {
+    fn touch(&self, obj: &mut Node2d, _id: u64, touch: &Touch, _pos: Vec2) {
         let mut color = match touch {
             Relese => {
                 obj.set_hash("button", false);

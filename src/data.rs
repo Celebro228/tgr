@@ -1,6 +1,4 @@
-use miniquad::fs;
-use std::{any::Any, sync::{Arc, Mutex}};
-use std::collections::HashMap;
+use std::{collections::HashMap, any::Any};
 
 #[cfg(feature = "storage")]
 use quad_storage::STORAGE;
@@ -77,7 +75,8 @@ pub fn load_stat(key: usize) -> f32 {
         .unwrap()
 }
 
-pub fn load_file(path: &str) -> Result<Vec<u8>, String> {
+#[cfg(feature = "miniquad")]
+pub fn load_file(path: &str) -> Result<Vec<u8>, Error> {
     #[cfg(target_os = "ios")]
     let _ = std::env::set_current_dir(std::env::current_exe().unwrap().parent().unwrap());
 
@@ -87,8 +86,9 @@ pub fn load_file(path: &str) -> Result<Vec<u8>, String> {
     {
         let contents: Arc<Mutex<Option<Result<Vec<u8>, String>>>> = contents.clone();
 
-        fs::load_file(&path, move |bytes| {
-            *contents.lock().expect("Error load file") = Some(bytes.map_err(|_| "oh my god".to_string()));
+        miniquad::fs::load_file(&path, move |bytes| {
+            *contents.lock().expect("Error load file") =
+                Some(bytes.map_err(|_| "oh my god".to_string()));
         });
     }
 
@@ -97,6 +97,9 @@ pub fn load_file(path: &str) -> Result<Vec<u8>, String> {
     if let Some(contents) = contents {
         contents
     } else {
-        Err("Капец".to_string())
+        Err(Error)
     }
 }
+
+#[cfg(feature = "wgpu")]
+pub use std::fs::read as load_file;

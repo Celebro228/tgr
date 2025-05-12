@@ -1,4 +1,4 @@
-use tgr::{engine::*, node2d};
+use tgr::{node2d, prelude::*};
 
 struct P;
 
@@ -21,11 +21,11 @@ impl Module for P {
         }
     }
 
-    fn key(&self, _obj: &mut Node2d, key: &Key, _keymod: miniquad::KeyMods, _touch: &Touch) {
+    /*fn key(&self, _obj: &mut Node2d, key: &Key, _keymod: miniquad::KeyMods, _touch: &Touch) {
         if let Char(c) = key {
             println!("{:?}", c,)
         }
-    }
+    }*/
 }
 
 struct C;
@@ -78,11 +78,11 @@ impl Module for SCENE {
 fn main() {
     //set_data("ok", audio("./test/test.ogg"));
 
-    set_data("num", 0u8);
+    set_data("a", 0u8);
 
     set_stat(0, 0.); //load_stat(0));
 
-    let font = font("calibri.ttf");
+    let font = font("test/calibri.ttf");
 
     let o = String::from("ok");
     let s = node2d![
@@ -139,5 +139,5 @@ fn main() {
         //.backgraund()
         //.font()
         //.data()
-        .start("Title");
+        .start("Tgr test");
 }

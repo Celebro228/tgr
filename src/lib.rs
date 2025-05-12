@@ -3,6 +3,7 @@ pub mod data;
 pub mod engine;
 pub mod object;
 pub mod physic;
+pub mod prelude;
 pub mod render;
 
 // Option
