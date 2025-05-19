@@ -122,6 +122,7 @@ pub(crate) static mut TEXUTRES_ID: usize = 0;
 pub(crate) static mut TEXUTRES_BUFFER: Vec<(Vec<u8>, u16, u16)> = Vec::new();
 pub(crate) static mut TEXUTRES_UPDATE: Vec<(usize, Vec<u8>, u16, u16)> = Vec::new();
 
+#[derive(Clone, Copy, PartialEq)]
 pub struct Texture {
     pub(crate) id: usize,
     pub width: f32,

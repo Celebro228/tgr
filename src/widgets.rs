@@ -35,7 +35,7 @@ pub fn button(name: &str, tex: &str, size: f32, font: &Font) -> Node2d {
     let tex = text("text", &tex, size, &font);
     let mut size = vec2(0., 0.);
 
-    if let Obj2d::Text(_, _, _, ref t) = tex.obj {
+    if let Obj2d::Text(_, _, _, ref t) = tex.node2d.obj {
         size = vec2(t.width, t.height)
     }
 
@@ -44,6 +44,7 @@ pub fn button(name: &str, tex: &str, size: f32, font: &Font) -> Node2d {
         .node(vec![tex])
         .script(&Button)
         .hash("button", false)
+        .get_node()
 }
 
 struct Check;
@@ -89,7 +90,8 @@ pub fn check(name: &str, size: f32) -> Node2d {
         .color(Rgba::new(0.1, 0.1, 0.1, 1.))
         .node(vec![circle("button", size / 2.)])
         .script(&Check)
-        .hash("check", false) //.hash("posx", 0.)
+        .hash("check", false)
+        .get_node() //.hash("posx", 0.)
 }
 
 /*struct EditText;

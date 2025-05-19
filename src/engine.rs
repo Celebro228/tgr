@@ -1,11 +1,14 @@
+use std::f32::consts::PI;
+
 use crate::{
     object::{
         d2::{Node2d, ON_TOUCH},
         Touch,
     },
+    prelude::CreateNode2d,
     render::{
         d2::{
-            upd_proj, CAMERA, CANVAS, CANVAS_UPDATE, RENDERS, UPD_RENDER_BUFFER, VIEW_HEIGHT,
+            upd_proj, CAMERA2d, CANVAS, CANVAS_UPDATE, RENDERS, UPD_RENDER_BUFFER, VIEW_HEIGHT,
             VIEW_WIDTH, ZOOM,
         },
         Rgba, View, FPS, FPS_BUFFER, LAST_FPS_TIME, LAST_FRAME_TIME, WINDOW, WINDOW_UPDATE,
@@ -35,47 +38,54 @@ pub(crate) static mut MOUSE: Vec2 = Vec2::new(0., 0.);
 pub(crate) static mut MOUSE_DELTA: Vec2 = Vec2::new(0., 0.);
 pub(crate) static mut MOUSE_WHEEL_DELTA: Vec2 = Vec2::new(0., 0.);
 
+pub(crate) fn update() {
+    unsafe {
+        if let Some(node) = &mut NODE2D {
+            node.update();
+        }
+    }
+}
+
+pub(crate) fn draw() {
+    unsafe {
+        MOUSE_DELTA = Vec2::ZERO;
+        MOUSE_WHEEL_DELTA = Vec2::ZERO;
+
+        RENDERS.clear();
+
+        if CANVAS_UPDATE {
+            CANVAS_UPDATE = false;
+            upd_proj();
+        }
+
+        FPS_BUFFER += 1;
+
+        if LAST_FPS_TIME <= LAST_FRAME_TIME {
+            FPS = FPS_BUFFER;
+            FPS_BUFFER = 0;
+            LAST_FPS_TIME = LAST_FRAME_TIME + 1.;
+        }
+
+        if let Some(node) = &mut NODE2D {
+            node.draw(1.);
+        }
+    }
+}
+
+pub(crate) fn touch(id: u64, touch: &Touch, pos: Vec2) {
+    unsafe {
+        if let Some(node) = &mut NODE2D {
+            ON_TOUCH = true;
+            node.touch(id, touch, pos);
+        }
+    }
+}
+
 pub struct Engine;
 
 impl Engine {
-    pub fn start(self, name: &str) -> Self {
+    pub fn start(&self, name: &str) {
         render(name);
-        self
-    }
-
-    pub(crate) fn update() {
-        unsafe {
-            if let Some(node) = &mut NODE2D {
-                node.update();
-            }
-        }
-    }
-
-    pub(crate) fn draw() {
-        unsafe {
-            MOUSE_DELTA = Vec2::ZERO;
-            MOUSE_WHEEL_DELTA = Vec2::ZERO;
-
-            RENDERS.clear();
-
-            if CANVAS_UPDATE {
-                CANVAS_UPDATE = false;
-                upd_proj();
-            }
-
-            FPS_BUFFER += 1;
-
-            if LAST_FPS_TIME <= LAST_FRAME_TIME {
-                FPS = FPS_BUFFER;
-                FPS_BUFFER = 0;
-                LAST_FPS_TIME = LAST_FRAME_TIME + 1.;
-            }
-
-            if let Some(node) = &mut NODE2D {
-                node.global_position = -CAMERA;
-                node.draw(1.);
-            }
-        }
     }
 
     /*pub(crate) fn key(&mut self, key: &Key, keymod: KeyMods, touch: &Touch) {
@@ -86,18 +96,9 @@ impl Engine {
         }
     }*/
 
-    pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
+    pub fn node2d(self, node: CreateNode2d) -> Self {
         unsafe {
-            if let Some(node) = &mut NODE2D {
-                ON_TOUCH = true;
-                node.touch(id, touch, pos);
-            }
-        }
-    }
-
-    pub fn node2d(self, node: Node2d) -> Self {
-        unsafe {
-            NODE2D = Some(node);
+            NODE2D = Some(node.get_node());
 
             if let Some(node) = &mut NODE2D {
                 node.start();
@@ -116,6 +117,8 @@ impl Engine {
     pub fn window(self, x: f32, y: f32) -> Self {
         unsafe {
             WINDOW = vec2(x, y);
+            WINDOW_UPDATE = true;
+            CANVAS_UPDATE = true;
         }
         self
     }
@@ -123,6 +126,7 @@ impl Engine {
     pub fn canvas(self, x: f32, y: f32) -> Self {
         unsafe {
             CANVAS = vec2(x, y);
+            CANVAS_UPDATE = true;
         }
         self
     }
@@ -164,82 +168,44 @@ impl Engine {
     }
 
     pub fn camera(self, x: f32, y: f32) -> Self {
-        set_camera(x, y);
+        Camera2d.set(vec2(x, y));
         self
     }
 
     pub fn zoom(self, n: f32) -> Self {
-        set_zoom(n);
+        Camera2d.set_zoom(n);
         self
     }
 }
 
-#[inline(always)]
-pub(crate) fn get_window_update() -> bool {
-    unsafe {
-        if WINDOW_UPDATE == true {
-            WINDOW_UPDATE = false;
-            true
-        } else {
-            false
-        }
-    }
-}
-#[inline(always)]
-pub fn set_window(x: f32, y: f32) {
-    unsafe {
-        WINDOW = vec2(x, y);
-        WINDOW_UPDATE = true;
-        CANVAS_UPDATE = true;
-    }
-}
-#[inline(always)]
-pub fn set_canvas(x: f32, y: f32) {
-    unsafe {
-        CANVAS = vec2(x, y);
-        CANVAS_UPDATE = true;
-    }
-}
-#[inline(always)]
-pub(crate) fn get_canvas_update() -> bool {
-    unsafe {
-        if CANVAS_UPDATE == true {
-            CANVAS_UPDATE = false;
-            true
-        } else {
-            false
-        }
-    }
-}
-#[inline(always)]
-pub(crate) fn get_add_buffer() -> bool {
-    unsafe {
-        if UPD_RENDER_BUFFER {
-            UPD_RENDER_BUFFER = false;
-            true
-        } else {
-            false
-        }
-    }
-}
+pub struct Camera2d;
 
-#[inline(always)]
-pub fn set_camera(x: f32, y: f32) {
-    unsafe {
-        CAMERA = vec2(x, y);
-        CANVAS_UPDATE = true;
+impl Camera2d {
+    pub fn set(self, pos: Vec2) -> Self {
+        unsafe {
+            CAMERA2d = pos;
+            CANVAS_UPDATE = true;
+        }
+        self
     }
-}
-#[inline(always)]
-pub fn get_camera() -> Vec2 {
-    unsafe {
-        CAMERA
+
+    pub fn get(&self) -> Vec2 {
+        unsafe {
+            CAMERA2d
+        }
     }
-}
-#[inline(always)]
-pub fn set_zoom(n: f32) {
-    unsafe {
-        ZOOM = n;
-        CANVAS_UPDATE = true;
+
+    pub fn set_zoom(self, n: f32) -> Self {
+        unsafe {
+            ZOOM = n;
+            CANVAS_UPDATE = true;
+        }
+        self
+    }
+
+    pub fn get_zoom(&self) -> f32 {
+        unsafe {
+            ZOOM
+        }
     }
 }

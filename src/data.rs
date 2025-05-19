@@ -1,4 +1,4 @@
-use std::{collections::HashMap, any::Any};
+use std::{any::Any, collections::HashMap};
 
 #[cfg(feature = "storage")]
 use quad_storage::STORAGE;
@@ -76,15 +76,16 @@ pub fn load_stat(key: usize) -> f32 {
 }
 
 #[cfg(feature = "miniquad")]
-pub fn load_file(path: &str) -> Result<Vec<u8>, Error> {
+pub fn load_file(path: &str) -> Result<Vec<u8>, String> {
     #[cfg(target_os = "ios")]
     let _ = std::env::set_current_dir(std::env::current_exe().unwrap().parent().unwrap());
 
-    let contents = Arc::new(Mutex::new(None));
+    let contents = std::sync::Arc::new(std::sync::Mutex::new(None));
     let path = path.to_owned();
 
     {
-        let contents: Arc<Mutex<Option<Result<Vec<u8>, String>>>> = contents.clone();
+        let contents: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<u8>, String>>>> =
+            contents.clone();
 
         miniquad::fs::load_file(&path, move |bytes| {
             *contents.lock().expect("Error load file") =
@@ -97,7 +98,7 @@ pub fn load_file(path: &str) -> Result<Vec<u8>, Error> {
     if let Some(contents) = contents {
         contents
     } else {
-        Err(Error)
+        Err(String::from("err"))
     }
 }
 

@@ -8,7 +8,7 @@ pub(crate) static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> = Vec
 pub(crate) static mut UPD_RENDER_BUFFER: bool = true;
 
 pub(super) static mut PROJ: Mat4 = Mat4::IDENTITY;
-pub(crate) static mut MOUSE_PROJ: Vec2 = Vec2::new(0., 0.);
+pub(crate) static mut MOUSE_PROJ: Vec2 = Vec2::ZERO;
 
 pub(crate) static mut CANVAS: Vec2 = Vec2::new(1280., 720.);
 pub(crate) static mut CANVAS_UPDATE: bool = false;
@@ -17,10 +17,9 @@ pub(crate) static mut CANVAS_PROJ: Vec2 = Vec2::new(1280. / 2., 720. / 2.);
 pub(crate) static mut VIEW_WIDTH: View = View::KeepHeight;
 pub(crate) static mut VIEW_HEIGHT: View = View::KeepWidth;
 
-pub(crate) static mut CAMERA: Vec2 = Vec2::new(0., 0.);
-pub(crate) static mut ZOOM: f32 = 1.;
+pub(crate) static mut CAMERA2d: Vec2 = Vec2::ZERO;
 
-pub(crate) static mut TOUCH: bool = false;
+pub(crate) static mut ZOOM: f32 = 1.;
 
 #[inline(always)]
 pub(crate) fn draw(
@@ -244,24 +243,52 @@ pub(crate) fn upd_proj() {
                 let scale = canvas.y / (aspect_window / aspect_canvas);
                 MOUSE_PROJ = vec2(canvas.x / window.x, scale / window.y);
                 CANVAS_PROJ = vec2(canvas.x, scale);
-                Mat4::orthographic_rh_gl(-canvas.x, canvas.x, scale, -scale, -1.0, 1.0)
+                Mat4::orthographic_rh_gl(
+                    -canvas.x + CAMERA2d.x,
+                    canvas.x + CAMERA2d.x,
+                    scale + CAMERA2d.y,
+                    -scale + CAMERA2d.y,
+                    -1.0,
+                    1.0,
+                )
             }
             View::KeepHeight => {
                 let scale = canvas.x / (aspect_canvas / aspect_window);
                 MOUSE_PROJ = vec2(scale / window.x, canvas.y / window.y);
                 CANVAS_PROJ = vec2(scale, canvas.y);
-                Mat4::orthographic_rh_gl(-scale, scale, canvas.y, -canvas.y, -1.0, 1.0)
+                Mat4::orthographic_rh_gl(
+                    -scale + CAMERA2d.x,
+                    scale + CAMERA2d.x,
+                    canvas.y + CAMERA2d.y,
+                    -canvas.y + CAMERA2d.y,
+                    -1.0,
+                    1.0,
+                )
             }
             View::Scale => {
                 MOUSE_PROJ = vec2(canvas.x / window.x, canvas.y / window.y);
                 CANVAS_PROJ = vec2(canvas.x, canvas.y);
-                Mat4::orthographic_rh_gl(-canvas.x, canvas.x, canvas.y, -canvas.y, -1.0, 1.0)
+                Mat4::orthographic_rh_gl(
+                    -canvas.x + CAMERA2d.x,
+                    canvas.x + CAMERA2d.x,
+                    canvas.y + CAMERA2d.y,
+                    -canvas.y + CAMERA2d.y,
+                    -1.0,
+                    1.0,
+                )
             }
             View::Window => {
                 let window = window * ZOOM;
                 MOUSE_PROJ = vec2(ZOOM, ZOOM);
                 CANVAS_PROJ = vec2(window.x, window.y);
-                Mat4::orthographic_rh_gl(-window.x, window.x, window.y, -window.y, -1.0, 1.0)
+                Mat4::orthographic_rh_gl(
+                    -window.x + CAMERA2d.x,
+                    window.x + CAMERA2d.x,
+                    window.y + CAMERA2d.y,
+                    -window.y + CAMERA2d.y,
+                    -1.0,
+                    1.0,
+                )
             }
         };
 

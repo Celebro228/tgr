@@ -1,7 +1,7 @@
 use super::{Keep, Touch};
 use crate::render::{
     add_text,
-    d2::{draw, CAMERA, CANVAS_PROJ, TOUCH, UPD_RENDER_BUFFER},
+    d2::{draw, CAMERA2d, CANVAS_PROJ, UPD_RENDER_BUFFER, CANVAS_UPDATE},
     rgb, Font, Rgba, Texture, DELTA,
 };
 
@@ -10,6 +10,7 @@ use std::{any::Any, collections::HashMap};
 
 pub(crate) static mut ON_TOUCH: bool = false;
 
+#[derive(Clone, PartialEq)]
 pub enum Obj2d {
     None,
     Rect(f32, f32, f32),
@@ -34,129 +35,47 @@ impl Obj2d {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum DrawUpdate {
+    None,
+    Update,
+    Create,
+}
+
+struct Chache {
+    offset: Vec2,
+}
+
+struct Hidden {
+    obj: Obj2d,
+    position: Vec2,
+    scale: Vec2,
+    offset: Vec2,
+    visible: bool,
+}
+
 pub struct Node2d {
     pub name: String,
     pub obj: Obj2d,
-    pub(crate) parent_position: Vec2,
-    pub(crate) global_position: Vec2,
+    pub parent_position: Vec2,
+    pub global_position: Vec2,
     pub position: Vec2,
     pub rotation: f32,
     pub scale: Vec2,
     pub color: Rgba,
     pub keep: Keep,
     pub offset: Vec2,
-    visible: bool,
-    pub(crate) node: Vec<Node2d>,
+    pub visible: bool,
+    pub node: Vec<Node2d>,
     pub script: Option<&'static dyn Module>,
     pub hash: HashMap<&'static str, Box<dyn Any + Send + Sync>>,
     touch_id: Option<u64>,
+    draw_update: DrawUpdate,
+    chache: Chache,
+    hidden: Hidden,
 }
 
 impl Node2d {
-    pub fn new(name: &str, obj: Obj2d) -> Self {
-        Self {
-            name: name.to_string(),
-            obj,
-            parent_position: Vec2::new(0., 0.),
-            global_position: Vec2::new(0., 0.),
-            position: Vec2::new(0., 0.),
-            rotation: 0.,
-            scale: Vec2::new(1., 1.),
-            color: rgb(234, 234, 234),
-            visible: true,
-            keep: Keep::Canvas,
-            offset: Vec2::new(0., 0.),
-            node: Vec::new(),
-            script: None,
-            hash: HashMap::new(),
-            touch_id: None,
-        }
-    }
-
-    pub fn node(mut self, node: Vec<Node2d>) -> Self {
-        self.node.extend(node);
-        self
-    }
-
-    pub fn hash<T: 'static + Send + Sync>(mut self, key: &'static str, value: T) -> Self {
-        self.hash.insert(key, Box::new(value));
-        self
-    }
-
-    pub fn script(mut self, script: &'static dyn Module) -> Self {
-        self.script = Some(script);
-        self
-    }
-
-    pub fn position(mut self, x: f32, y: f32) -> Self {
-        self.position = vec2(x, y);
-        self
-    }
-
-    pub fn scale(mut self, x: f32, y: f32) -> Self {
-        self.scale = vec2(x, y);
-        self
-    }
-
-    pub fn rotation(mut self, r: f32) -> Self {
-        self.rotation = r;
-        self
-    }
-
-    pub fn color(mut self, color: Rgba) -> Self {
-        self.color = color;
-        self
-    }
-
-    pub fn visible(mut self, sel: bool) -> Self {
-        self.visible = sel;
-        self
-    }
-
-    pub fn keep(mut self, keep: Keep) -> Self {
-        self.keep = keep;
-        self
-    }
-
-    pub fn offset(mut self, x: f32, y: f32) -> Self {
-        self.offset = vec2(x, y);
-        self
-    }
-
-    pub fn get_parent_position(&self) -> Vec2 {
-        self.parent_position
-    }
-
-    pub fn set_global_position(&mut self, x: f32, y: f32) {
-        self.position = vec2(x, y) - self.parent_position;
-    }
-
-    pub fn get_visible(&self) -> bool {
-        self.visible
-    }
-
-    pub fn set_visible(&mut self, sel: bool) {
-        self.visible = sel;
-        unsafe { UPD_RENDER_BUFFER = true }
-    }
-
-    #[inline(always)]
-    pub fn get_global_position(&mut self) -> Vec2 {
-        unsafe {
-            match self.keep {
-                Keep::Canvas => self.parent_position + self.position,
-                Keep::Center => CAMERA + self.position,
-                Keep::Up => CAMERA + self.position + vec2(0., -CANVAS_PROJ.y),
-                Keep::Down => CAMERA + self.position + vec2(0., CANVAS_PROJ.y),
-                Keep::Left => CAMERA + self.position + vec2(-CANVAS_PROJ.x, 0.),
-                Keep::Right => CAMERA + self.position + vec2(CANVAS_PROJ.x, 0.),
-                Keep::LeftUp => CAMERA + self.position - CANVAS_PROJ,
-                Keep::LeftDown => CAMERA + self.position + vec2(-CANVAS_PROJ.x, CANVAS_PROJ.y),
-                Keep::RightUp => CAMERA + self.position + vec2(CANVAS_PROJ.x, -CANVAS_PROJ.y),
-                Keep::RightDown => CAMERA + self.position + CANVAS_PROJ,
-            }
-        }
-    }
 
     pub fn get_node(&mut self, name: &str) -> Option<&mut Node2d> {
         let name = name.to_string();
@@ -186,8 +105,11 @@ impl Node2d {
         }
     }
 
-    pub fn add_node(&mut self, node: Vec<Node2d>) {
+    pub fn add_node(&mut self, node: Vec<CreateNode2d>) {
+        let node: Vec<Node2d> = node.into_iter().map(|n| n.get_node()).collect();
+
         self.node.extend(node);
+
         unsafe { UPD_RENDER_BUFFER = true }
     }
 
@@ -203,35 +125,35 @@ impl Node2d {
         self.hash.get_mut(key)?.downcast_mut::<T>()
     }
 
-    pub(crate) fn start(&mut self) {
-        if let Some(s) = self.script {
-            s.start(self);
-        }
-
-        self.global_position = self.get_global_position();
-
-        for obj in &mut self.node {
-            obj.parent_position = self.global_position;
-            obj.start();
-        }
-    }
-
     pub(crate) fn update(&mut self) {
+        self.upd_pos();
+
+
         if let Some(s) = self.script {
             s.update(self, unsafe { DELTA });
         }
 
-        self.global_position = self.get_global_position();
+        self.upd_pos();
 
-        let parrent_pos = self.global_position
-            + match &self.obj {
-                Obj2d::Rect(w, h, _) => self.offset * vec2(*w, *h) * self.scale / 2.,
-                Obj2d::Circle(r) => self.offset * r * self.scale / 2.,
+        if self.obj != self.hidden.obj
+            || self.offset != self.hidden.offset
+            || self.scale != self.hidden.scale
+        {
+            self.hidden.obj = self.obj.clone();
+            self.hidden.offset = self.offset;
+            self.hidden.scale = self.scale;
+
+            self.chache.offset = match &self.obj {
+                Obj2d::Rect(w, h, _) => self.offset * vec2(*w, *h) * self.scale,
+                Obj2d::Circle(r) => self.offset * r * self.scale,
                 Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
-                    self.offset * vec2(t.width, t.height) * self.scale / 2.
+                    self.offset * vec2(t.width, t.height) * self.scale
                 }
                 Obj2d::None => vec2(0., 0.),
             };
+        }
+
+        let parrent_pos = self.global_position + self.chache.offset / 2.;
 
         for obj in &mut self.node {
             obj.parent_position = parrent_pos;
@@ -239,7 +161,36 @@ impl Node2d {
         }
     }
 
+    #[inline(always)]
+    fn upd_pos(&mut self) {
+        if self.global_position != self.hidden.position {
+            self.position = self.global_position - self.parent_position;
+        }
+
+        self.global_position = unsafe {
+            match self.keep {
+                Keep::Canvas => self.parent_position,
+                Keep::Center => CAMERA2d,
+                Keep::Up => CAMERA2d + vec2(0., -CANVAS_PROJ.y),
+                Keep::Down => CAMERA2d + vec2(0., CANVAS_PROJ.y),
+                Keep::Left => CAMERA2d + vec2(-CANVAS_PROJ.x, 0.),
+                Keep::Right => CAMERA2d + vec2(CANVAS_PROJ.x, 0.),
+                Keep::LeftUp => CAMERA2d - CANVAS_PROJ,
+                Keep::LeftDown => CAMERA2d + vec2(-CANVAS_PROJ.x, CANVAS_PROJ.y),
+                Keep::RightUp => CAMERA2d + vec2(CANVAS_PROJ.x, -CANVAS_PROJ.y),
+                Keep::RightDown => CAMERA2d + CANVAS_PROJ,
+            } } + self.position;
+        
+        self.hidden.position = self.global_position;
+    }
+
     pub(crate) fn draw(&mut self, a: f32) {
+        if self.visible != self.hidden.visible {
+            self.hidden.visible = self.visible;
+        
+            unsafe { UPD_RENDER_BUFFER = true }
+        }
+
         if self.visible {
             let mut color = self.color.get();
             color[3] *= a;
@@ -253,9 +204,21 @@ impl Node2d {
                 color,
             );
 
+            self.draw_update = DrawUpdate::None;
+
             for obj in &mut self.node {
                 obj.draw(color[3]);
             }
+        }
+    }
+
+    pub(crate) fn start(&mut self) {
+        if let Some(s) = self.script {
+            s.start(self);
+        }
+
+        for obj in &mut self.node {
+            obj.start();
         }
     }
 
@@ -271,14 +234,14 @@ impl Node2d {
 
     pub(crate) fn touch(&mut self, id: u64, touch: &Touch, pos: Vec2) {
         for obj in &mut self.node.iter_mut().rev() {
-            if unsafe { TOUCH } {
+            if unsafe { ON_TOUCH } {
                 obj.touch(id, touch, pos);
             } else {
                 break;
             }
         }
 
-        if unsafe { TOUCH } {
+        if unsafe { ON_TOUCH } {
             if let Some(s) = self.script {
                 if match touch {
                     Touch::Press => {
@@ -293,29 +256,24 @@ impl Node2d {
 
                         if match &self.obj {
                             Obj2d::Rect(w, h, _) => {
-                                let offset = self.offset * vec2(*w, *h) * self.scale;
-
-                                ((local_x - offset.x).abs()) / self.scale.x + offset.x < w / 2.
-                                    && ((local_y - offset.y).abs()) / self.scale.y + offset.y
+                                ((local_x - self.chache.offset.x).abs()) / self.scale.x
+                                    + self.chache.offset.x
+                                    < w / 2.
+                                    && ((local_y - self.chache.offset.y).abs()) / self.scale.y
+                                        + self.chache.offset.y
                                         < h / 2.
                             }
                             Obj2d::Circle(r) => {
-                                let offset = self.offset * r * self.scale;
-
-                                println!("{}", (((local_x - offset.x) / self.scale.x).powi(2)
-                                    + ((local_y - offset.y) / self.scale.y).powi(2))
-                                .sqrt());
-
-                                (((local_x - offset.x) / self.scale.x).powi(2)
-                                    + ((local_y - offset.y) / self.scale.y).powi(2))
+                                (((local_x - self.chache.offset.x) / self.scale.x).powi(2)
+                                    + ((local_y - self.chache.offset.y) / self.scale.y).powi(2))
                                 .sqrt()
                                     < *r
                             }
                             Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
-                                let offset = self.offset * vec2(t.width, t.height) * self.scale;
-
-                                ((local_x - offset.x).abs()) / self.scale.x < t.width / 2.
-                                    && ((local_y - offset.y).abs()) / self.scale.y < t.height / 2.
+                                ((local_x - self.chache.offset.x).abs()) / self.scale.x
+                                    < t.width / 2.
+                                    && ((local_y - self.chache.offset.y).abs()) / self.scale.y
+                                        < t.height / 2.
                             }
                             Obj2d::None => true,
                         } {
@@ -336,7 +294,7 @@ impl Node2d {
                     Touch::Move => self.touch_id == Some(id),
                 } {
                     unsafe {
-                        TOUCH = false;
+                        ON_TOUCH = false;
                     }
                     s.touch(self, id, touch, pos);
                 }
@@ -345,17 +303,116 @@ impl Node2d {
     }
 }
 
-#[inline(always)]
-pub fn circle(name: &str, r: f32) -> Node2d {
-    Node2d::new(name, Obj2d::Circle(r))
+pub struct CreateNode2d {
+    pub node2d: Node2d,
+}
+
+impl CreateNode2d {
+    pub fn new(name: &str, obj: Obj2d) -> Self {
+        Self {
+            node2d: Node2d {
+                name: name.to_string(),
+                obj: obj.clone(),
+                parent_position: Vec2::ZERO,
+                global_position: Vec2::ZERO,
+                position: Vec2::ZERO,
+                rotation: 0.,
+                scale: Vec2::new(1., 1.),
+                color: rgb(234, 234, 234),
+                visible: true,
+                keep: Keep::Canvas,
+                offset: Vec2::ZERO,
+                node: Vec::new(),
+                script: None,
+                hash: HashMap::new(),
+                touch_id: None,
+                draw_update: DrawUpdate::Create,
+                chache: Chache { offset: Vec2::ZERO },
+                hidden: Hidden {
+                    obj,
+                    position: Vec2::ZERO,
+                    scale: Vec2::ZERO,
+                    offset: Vec2::ZERO,
+                    visible: true,
+                },
+            },
+        }
+    }
+
+    pub fn node(mut self, node: Vec<CreateNode2d>) -> Self {
+        self.node2d.add_node(node);
+        self
+    }
+
+    pub fn hash<T: 'static + Send + Sync>(mut self, key: &'static str, value: T) -> Self {
+        self.node2d.hash.insert(key, Box::new(value));
+        self
+    }
+
+    pub fn script(mut self, script: &'static dyn Module) -> Self {
+        self.node2d.script = Some(script);
+        self
+    }
+
+    pub fn position(mut self, x: f32, y: f32) -> Self {
+        self.node2d.position = vec2(x, y);
+        self
+    }
+
+    pub fn scale(mut self, x: f32, y: f32) -> Self {
+        self.node2d.scale = vec2(x, y);
+        self
+    }
+
+    pub fn rotation(mut self, r: f32) -> Self {
+        self.node2d.rotation = r;
+        self
+    }
+
+    pub fn color(mut self, color: Rgba) -> Self {
+        self.node2d.color = color;
+        self
+    }
+
+    pub fn visible(mut self, sel: bool) -> Self {
+        self.node2d.visible = sel;
+        self
+    }
+
+    pub fn keep(mut self, keep: Keep) -> Self {
+        self.node2d.keep = keep;
+        self
+    }
+
+    pub fn offset(mut self, x: f32, y: f32) -> Self {
+        self.node2d.offset = vec2(x, y);
+        self
+    }
+
+    pub fn get_node(self) -> Node2d {
+        self.node2d
+    }
 }
 
 #[inline(always)]
-pub fn rect(name: &str, w: f32, h: f32, r: f32) -> Node2d {
-    Node2d::new(name, Obj2d::Rect(w, h, r))
+pub fn circle(name: &str, r: f32) -> CreateNode2d {
+    CreateNode2d::new(name, Obj2d::Circle(r))
 }
 
-pub fn line(name: &str, x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, r: f32) -> Node2d {
+#[inline(always)]
+pub fn rect(name: &str, w: f32, h: f32, r: f32) -> CreateNode2d {
+    CreateNode2d::new(name, Obj2d::Rect(w, h, r))
+}
+
+pub fn line(
+    name: &str,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    thickness: f32,
+    r: f32,
+) -> CreateNode2d {
     let dx = x2 - x1;
     let dy = y2 - y1;
 
@@ -365,14 +422,14 @@ pub fn line(name: &str, x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, r: f
     let center_x = (x1 + x2) / 2.0;
     let center_y = (y1 + y2) / 2.0;
 
-    Node2d::new(name, Obj2d::Rect(length, thickness, r))
+    CreateNode2d::new(name, Obj2d::Rect(length, thickness, r))
         .position(center_x, center_y)
         .rotation(angle)
 }
 
 #[inline(always)]
-pub fn image(name: &str, texture: &Texture) -> Node2d {
-    Node2d::new(
+pub fn image(name: &str, texture: &Texture) -> CreateNode2d {
+    CreateNode2d::new(
         name,
         Obj2d::Texture(Texture {
             id: texture.id,
@@ -383,9 +440,9 @@ pub fn image(name: &str, texture: &Texture) -> Node2d {
 }
 
 #[inline(always)]
-pub fn text(name: &str, text: &str, size: f32, font: &Font) -> Node2d {
+pub fn text(name: &str, text: &str, size: f32, font: &Font) -> CreateNode2d {
     let (id, w, h) = add_text(text, size, font.id, None);
-    Node2d::new(
+    CreateNode2d::new(
         name,
         Obj2d::Text(
             text.to_string(),
@@ -406,7 +463,7 @@ pub trait Module {
     //fn key(&self, _obj: &mut Node2d, _key: &Key, _keymod: KeyMods, _touch: &Touch) {}
     fn touch(&self, _obj: &mut Node2d, _id: u64, _touch: &Touch, _pos: Vec2) {
         unsafe {
-            TOUCH = true;
+            ON_TOUCH = true;
         }
     }
 }
@@ -416,7 +473,7 @@ macro_rules! node2d {
     ( $( $x:expr ),* $(,)? ) => {
         {
             let children = vec![$($x),*];
-            $crate::object::d2::Node2d::new("", $crate::object::d2::Obj2d::None).node(children)
+            $crate::object::d2::CreateNode2d::new("", $crate::object::d2::Obj2d::None).node(children)
         }
     };
 }

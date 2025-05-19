@@ -12,12 +12,12 @@ impl Module for P {
 
     fn update(&self, obj: &mut Node2d, d: f32) {
         obj.rotation += d as f32 / 10.;
-        obj.set_visible(!obj.get_visible());
+        obj.visible = !obj.visible;
     }
 
     fn touch(&self, obj: &mut Node2d, _id: u64, touch: &Touch, pos: Vec2) {
         if let Move = touch {
-            obj.set_global_position(pos.x, pos.y);
+            obj.global_position = vec2(pos.x, pos.y);
         }
     }
 
@@ -40,11 +40,13 @@ impl Module for C {
     }
 
     fn update(&self, obj: &mut Node2d, d: f32) {
-        let p = 100. * d as f32;
+        let p = 100. * d;
         //println!("{}", get_fps());
         //println!("{} {}", get_mouse().x, get_mouse().y)
         //set_canvas(get_canvas().x + p, get_canvas().y);
-        set_camera(get_camera().x + p, get_camera().y);
+        let mut cam = Camera2d.get();
+        cam.x += p;
+        Camera2d.set(cam);
 
         //let num= get_data::<u8>("num").unwrap();
 

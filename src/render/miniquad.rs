@@ -1,10 +1,11 @@
 use super::{
-    d2::{upd_proj, CAMERA, CANVAS_UPDATE, MOUSE_PROJ, PROJ, RENDERS, UPD_RENDER_BUFFER},
+    d2::{upd_proj, CAMERA2d, CANVAS_UPDATE, MOUSE_PROJ, PROJ, RENDERS, UPD_RENDER_BUFFER},
     DELTA, LAST_FPS_TIME, LAST_FRAME_TIME, TEXUTRES_BUFFER, TEXUTRES_UPDATE, WINDOW, WINDOW_UPDATE,
 };
 use crate::{
     engine::{
-        Engine, BACKGRAUND, FULLSCREEN, HIGH_DPI, MOUSE, MOUSE_DELTA, MOUSE_WHEEL_DELTA, RESIZABLE,
+        draw, touch, update, BACKGRAUND, FULLSCREEN, HIGH_DPI, MOUSE, MOUSE_DELTA,
+        MOUSE_WHEEL_DELTA, RESIZABLE,
     },
     info::DEVICE,
     object::Touch,
@@ -90,7 +91,7 @@ impl QuadRender {
 }
 impl EventHandler for QuadRender {
     fn update(&mut self) {
-        Engine::update();
+        update();
     }
 
     fn draw(&mut self) {
@@ -101,7 +102,7 @@ impl EventHandler for QuadRender {
             };
         };
 
-        Engine::draw();
+        draw();
 
         unsafe {
             for i in &TEXUTRES_BUFFER {
@@ -211,7 +212,7 @@ impl EventHandler for QuadRender {
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
         unsafe {
             MOUSE = get_mouse_proj(x, y);
-            Engine.touch(0, &Touch::Move, vec2(MOUSE.x, MOUSE.y));
+            touch(0, &Touch::Move, vec2(MOUSE.x, MOUSE.y));
         }
     }
 
@@ -221,7 +222,7 @@ impl EventHandler for QuadRender {
 
     fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
         println!("{}", get_mouse_proj(x, y));
-        Engine.touch(
+        touch(
             match button {
                 MouseButton::Left => 0,
                 MouseButton::Right => 1,
@@ -234,7 +235,7 @@ impl EventHandler for QuadRender {
     }
 
     fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
-        Engine.touch(
+        touch(
             match button {
                 MouseButton::Left => 0,
                 MouseButton::Right => 1,
@@ -253,13 +254,13 @@ impl EventHandler for QuadRender {
     fn touch_event(&mut self, phase: TouchPhase, id: u64, x: f32, y: f32) {
         match phase {
             TouchPhase::Started => {
-                Engine.touch(id, &Touch::Press, get_mouse_proj(x, y));
+                touch(id, &Touch::Press, get_mouse_proj(x, y));
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
-                Engine.touch(id, &Touch::Relese, get_mouse_proj(x, y));
+                touch(id, &Touch::Relese, get_mouse_proj(x, y));
             }
             TouchPhase::Moved => {
-                Engine.touch(id, &Touch::Move, get_mouse_proj(x, y));
+                touch(id, &Touch::Move, get_mouse_proj(x, y));
             }
         }
     }
@@ -305,7 +306,7 @@ pub(crate) fn render(name: &str) {
 #[inline(always)]
 fn get_mouse_proj(x: f32, y: f32) -> Vec2 {
     //y - half_window.y) * get_mouse_proj().y - get_camera().y,
-    unsafe { (vec2(x, y) - WINDOW / 2.) * MOUSE_PROJ + CAMERA }
+    unsafe { (vec2(x, y) - WINDOW / 2.) * MOUSE_PROJ + CAMERA2d }
 }
 
 mod shader {

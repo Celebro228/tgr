@@ -1741,6 +1741,7 @@ dependencies = [
 name = "tgr"
 version = "4.0.0"
 dependencies = [
+ "bytemuck",
  "glam",
  "image",
  "miniquad",
