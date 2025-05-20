@@ -126,16 +126,16 @@ fn main() {
     ]
     .script(&SCENE);
 
+    Camera2d.view(KeepHeight, KeepWidth).set_zoom(2.);
+
     Engine
         .node2d(s)
         .fullscreen(false)
         .window(1280., 720.)
         .canvas(1000., 1000.)
-        //.canvas(1000, 1000)
-        .view(KeepHeight, KeepWidth)
-        //.camera(100., 0.)
-        .zoom(2.)
         .backgraund(rgba(0, 0, 0, 0.2))
+        //.canvas(1000, 1000)
+        //.camera(100., 0.)
         //.mouse(KEEP_IN)
         //.touch_in_mouse(false)
         //.backgraund()

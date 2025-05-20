@@ -3,7 +3,7 @@ pub use crate::info::*;
 pub use crate::object::{d2::*, Keep, Key, Touch};
 //pub use crate::physic::*;
 pub use crate::engine::*;
-pub use crate::render::*;
+pub use crate::render::{*, d2::*};
 
 pub use Keep::*;
 pub use Key::*;

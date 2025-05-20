@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use crate::{
     object::{
         d2::{Node2d, ON_TOUCH},
@@ -8,10 +6,9 @@ use crate::{
     prelude::CreateNode2d,
     render::{
         d2::{
-            upd_proj, CAMERA2d, CANVAS, CANVAS_UPDATE, RENDERS, UPD_RENDER_BUFFER, VIEW_HEIGHT,
-            VIEW_WIDTH, ZOOM,
+            upd_proj, CANVAS, CANVAS_UPDATE, RENDERS,
         },
-        Rgba, View, FPS, FPS_BUFFER, LAST_FPS_TIME, LAST_FRAME_TIME, WINDOW, WINDOW_UPDATE,
+        Rgba, FPS, FPS_BUFFER, LAST_FPS_TIME, LAST_FRAME_TIME, WINDOW, WINDOW_UPDATE,
     },
 };
 
@@ -51,8 +48,6 @@ pub(crate) fn draw() {
         MOUSE_DELTA = Vec2::ZERO;
         MOUSE_WHEEL_DELTA = Vec2::ZERO;
 
-        RENDERS.clear();
-
         if CANVAS_UPDATE {
             CANVAS_UPDATE = false;
             upd_proj();
@@ -82,7 +77,6 @@ pub(crate) fn touch(id: u64, touch: &Touch, pos: Vec2) {
 }
 
 pub struct Engine;
-
 impl Engine {
     pub fn start(&self, name: &str) {
         render(name);
@@ -99,6 +93,7 @@ impl Engine {
     pub fn node2d(self, node: CreateNode2d) -> Self {
         unsafe {
             NODE2D = Some(node.get_node());
+            RENDERS.clear();
 
             if let Some(node) = &mut NODE2D {
                 node.start();
@@ -152,60 +147,11 @@ impl Engine {
         self
     }
 
-    pub fn view(self, width: View, height: View) -> Self {
-        unsafe {
-            VIEW_WIDTH = width;
-            VIEW_HEIGHT = height;
-        }
-        self
-    }
-
     pub fn backgraund(self, color: Rgba) -> Self {
         unsafe {
             BACKGRAUND = color;
         }
         self
     }
-
-    pub fn camera(self, x: f32, y: f32) -> Self {
-        Camera2d.set(vec2(x, y));
-        self
-    }
-
-    pub fn zoom(self, n: f32) -> Self {
-        Camera2d.set_zoom(n);
-        self
-    }
 }
 
-pub struct Camera2d;
-
-impl Camera2d {
-    pub fn set(self, pos: Vec2) -> Self {
-        unsafe {
-            CAMERA2d = pos;
-            CANVAS_UPDATE = true;
-        }
-        self
-    }
-
-    pub fn get(&self) -> Vec2 {
-        unsafe {
-            CAMERA2d
-        }
-    }
-
-    pub fn set_zoom(self, n: f32) -> Self {
-        unsafe {
-            ZOOM = n;
-            CANVAS_UPDATE = true;
-        }
-        self
-    }
-
-    pub fn get_zoom(&self) -> f32 {
-        unsafe {
-            ZOOM
-        }
-    }
-}

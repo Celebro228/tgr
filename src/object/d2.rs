@@ -1,9 +1,9 @@
 use super::{Keep, Touch};
-use crate::render::{
+use crate::{prelude::new_render, render::{
     add_text,
-    d2::{draw, CAMERA2d, CANVAS_PROJ, UPD_RENDER_BUFFER, CANVAS_UPDATE},
+    d2::{draw, CAMERA2D, CANVAS_PROJ, CANVAS_UPDATE, RENDERS},
     rgb, Font, Rgba, Texture, DELTA,
-};
+}};
 
 use glam::{vec2, Vec2};
 use std::{any::Any, collections::HashMap};
@@ -35,7 +35,7 @@ impl Obj2d {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum DrawUpdate {
     None,
     Update,
@@ -70,11 +70,11 @@ pub struct Node2d {
     pub script: Option<&'static dyn Module>,
     pub hash: HashMap<&'static str, Box<dyn Any + Send + Sync>>,
     touch_id: Option<u64>,
+    render_id: usize,
     draw_update: DrawUpdate,
     chache: Chache,
     hidden: Hidden,
 }
-
 impl Node2d {
 
     pub fn get_node(&mut self, name: &str) -> Option<&mut Node2d> {
@@ -106,11 +106,16 @@ impl Node2d {
     }
 
     pub fn add_node(&mut self, node: Vec<CreateNode2d>) {
-        let node: Vec<Node2d> = node.into_iter().map(|n| n.get_node()).collect();
+        let mut node: Vec<Node2d> = node.into_iter().map(|n| {
+            let mut n = n.get_node();
+            if n.visible {
+                n.render_id = new_render();
+            }
+            n
+        }).collect();
 
         self.node.extend(node);
-
-        unsafe { UPD_RENDER_BUFFER = true }
+        
     }
 
     pub fn set_hash<T: 'static + Send + Sync>(&mut self, key: &'static str, value: T) {
@@ -125,9 +130,19 @@ impl Node2d {
         self.hash.get_mut(key)?.downcast_mut::<T>()
     }
 
+
+    pub(crate) fn start(&mut self) {
+        if let Some(s) = self.script {
+            s.start(self);
+        }
+
+        for obj in &mut self.node {
+            obj.start();
+        }
+    }
+
     pub(crate) fn update(&mut self) {
         self.upd_pos();
-
 
         if let Some(s) = self.script {
             s.update(self, unsafe { DELTA });
@@ -135,9 +150,9 @@ impl Node2d {
 
         self.upd_pos();
 
-        if self.obj != self.hidden.obj
+        if self.obj != Obj2d::None && (self.obj != self.hidden.obj
             || self.offset != self.hidden.offset
-            || self.scale != self.hidden.scale
+            || self.scale != self.hidden.scale)
         {
             self.hidden.obj = self.obj.clone();
             self.hidden.offset = self.offset;
@@ -151,6 +166,9 @@ impl Node2d {
                 }
                 Obj2d::None => vec2(0., 0.),
             };
+
+            self.draw_update = DrawUpdate::Update;
+            self.upd_img();
         }
 
         let parrent_pos = self.global_position + self.chache.offset / 2.;
@@ -161,48 +179,33 @@ impl Node2d {
         }
     }
 
-    #[inline(always)]
-    fn upd_pos(&mut self) {
-        if self.global_position != self.hidden.position {
-            self.position = self.global_position - self.parent_position;
-        }
-
-        self.global_position = unsafe {
-            match self.keep {
-                Keep::Canvas => self.parent_position,
-                Keep::Center => CAMERA2d,
-                Keep::Up => CAMERA2d + vec2(0., -CANVAS_PROJ.y),
-                Keep::Down => CAMERA2d + vec2(0., CANVAS_PROJ.y),
-                Keep::Left => CAMERA2d + vec2(-CANVAS_PROJ.x, 0.),
-                Keep::Right => CAMERA2d + vec2(CANVAS_PROJ.x, 0.),
-                Keep::LeftUp => CAMERA2d - CANVAS_PROJ,
-                Keep::LeftDown => CAMERA2d + vec2(-CANVAS_PROJ.x, CANVAS_PROJ.y),
-                Keep::RightUp => CAMERA2d + vec2(CANVAS_PROJ.x, -CANVAS_PROJ.y),
-                Keep::RightDown => CAMERA2d + CANVAS_PROJ,
-            } } + self.position;
-        
-        self.hidden.position = self.global_position;
-    }
-
     pub(crate) fn draw(&mut self, a: f32) {
-        if self.visible != self.hidden.visible {
+        if self.visible != self.hidden.visible && self.obj != Obj2d::None {
             self.hidden.visible = self.visible;
-        
-            unsafe { UPD_RENDER_BUFFER = true }
+            self.upd_img();
         }
 
         if self.visible {
             let mut color = self.color.get();
             color[3] *= a;
 
-            draw(
-                self.global_position,
-                &self.obj,
-                self.scale,
-                self.rotation,
-                self.offset,
-                color,
-            );
+            if self.draw_update != DrawUpdate::None {
+                draw(
+                    self.render_id,
+                    self.global_position,
+                    &self.obj,
+                    self.scale,
+                    self.rotation,
+                    self.offset,
+                    color,
+                );
+            }
+
+            unsafe {
+                if RENDERS[self.render_id].3 != DrawUpdate::Create {
+                    RENDERS[self.render_id].3 = self.draw_update;
+                }
+            }
 
             self.draw_update = DrawUpdate::None;
 
@@ -212,13 +215,45 @@ impl Node2d {
         }
     }
 
-    pub(crate) fn start(&mut self) {
-        if let Some(s) = self.script {
-            s.start(self);
+    #[inline(always)]
+    fn upd_pos(&mut self) {
+        if self.global_position != self.hidden.position {
+            self.position = self.global_position - self.parent_position;
+            self.draw_update = DrawUpdate::Update;
         }
 
-        for obj in &mut self.node {
-            obj.start();
+        self.global_position = unsafe {
+            match self.keep {
+                Keep::Canvas => self.parent_position,
+                Keep::Center => CAMERA2D,
+                Keep::Up => CAMERA2D + vec2(0., -CANVAS_PROJ.y),
+                Keep::Down => CAMERA2D + vec2(0., CANVAS_PROJ.y),
+                Keep::Left => CAMERA2D + vec2(-CANVAS_PROJ.x, 0.),
+                Keep::Right => CAMERA2D + vec2(CANVAS_PROJ.x, 0.),
+                Keep::LeftUp => CAMERA2D - CANVAS_PROJ,
+                Keep::LeftDown => CAMERA2D + vec2(-CANVAS_PROJ.x, CANVAS_PROJ.y),
+                Keep::RightUp => CAMERA2D + vec2(CANVAS_PROJ.x, -CANVAS_PROJ.y),
+                Keep::RightDown => CAMERA2D + CANVAS_PROJ,
+            } } + self.position;
+        
+        self.hidden.position = self.global_position;
+    }
+
+    #[inline(always)]
+    fn upd_img(&mut self) {
+        if self.visible {
+            let c = match &self.obj {
+                Obj2d::Rect(_, _, _) => None,
+                Obj2d::Circle(_) => None,
+                Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => Some(t.id),
+                Obj2d::None => None,
+            };
+
+            unsafe {
+                if c != RENDERS[self.render_id].2 {
+                    RENDERS[self.render_id].2 = c;
+                }
+            }
         }
     }
 
@@ -326,8 +361,11 @@ impl CreateNode2d {
                 script: None,
                 hash: HashMap::new(),
                 touch_id: None,
+                render_id: 0,
                 draw_update: DrawUpdate::Create,
-                chache: Chache { offset: Vec2::ZERO },
+                chache: Chache {
+                    offset: Vec2::ZERO,
+                },
                 hidden: Hidden {
                     obj,
                     position: Vec2::ZERO,

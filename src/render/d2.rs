@@ -1,11 +1,10 @@
 use super::{Vertex, View, WINDOW};
-use crate::object::d2::Obj2d;
+use crate::object::d2::{Obj2d, DrawUpdate};
 
 use glam::{vec2, vec3, Mat4, Vec2, Vec3};
 use std::f32::consts::TAU;
 
-pub(crate) static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>)> = Vec::new();
-pub(crate) static mut UPD_RENDER_BUFFER: bool = true;
+pub(crate) static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>, DrawUpdate)> = Vec::new();
 
 pub(super) static mut PROJ: Mat4 = Mat4::IDENTITY;
 pub(crate) static mut MOUSE_PROJ: Vec2 = Vec2::ZERO;
@@ -17,12 +16,52 @@ pub(crate) static mut CANVAS_PROJ: Vec2 = Vec2::new(1280. / 2., 720. / 2.);
 pub(crate) static mut VIEW_WIDTH: View = View::KeepHeight;
 pub(crate) static mut VIEW_HEIGHT: View = View::KeepWidth;
 
-pub(crate) static mut CAMERA2d: Vec2 = Vec2::ZERO;
+pub(crate) static mut CAMERA2D: Vec2 = Vec2::ZERO;
 
 pub(crate) static mut ZOOM: f32 = 1.;
 
+pub struct Camera2d;
+impl Camera2d {
+    pub fn set(self, pos: Vec2) -> Self {
+        unsafe {
+            CAMERA2D = pos;
+            CANVAS_UPDATE = true;
+        }
+        self
+    }
+
+    pub fn get(&self) -> Vec2 {
+        unsafe {
+            CAMERA2D
+        }
+    }
+
+    pub fn set_zoom(self, n: f32) -> Self {
+        unsafe {
+            ZOOM = n;
+            CANVAS_UPDATE = true;
+        }
+        self
+    }
+
+    pub fn get_zoom(&self) -> f32 {
+        unsafe {
+            ZOOM
+        }
+    }
+
+    pub fn view(self, width: View, height: View) -> Self {
+        unsafe {
+            VIEW_WIDTH = width;
+            VIEW_HEIGHT = height;
+        }
+        self
+    }
+}
+
 #[inline(always)]
 pub(crate) fn draw(
+    id: usize,
     pos: Vec2,
     obj: &Obj2d,
     scale: Vec2,
@@ -67,7 +106,7 @@ pub(crate) fn draw(
             }
             indices.extend([0, segments, 1]);
 
-            render(vertices, indices, None);
+            render(id, vertices, indices);
         }
         Obj2d::Rect(w, h, r) => {
             let w = (w * scale.x) / 2.;
@@ -145,7 +184,7 @@ pub(crate) fn draw(
                 indices.extend([0, segments as u16, 1]);
             }
 
-            render(vertices, indices, None);
+            render(id, vertices, indices);
         }
         Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => {
             let w = (t.width as f32 * scale.x) / 2.;
@@ -153,7 +192,7 @@ pub(crate) fn draw(
 
             let offset = offset * vec2(w, h) * scale;
 
-            render(
+            render(id, 
                 vec![
                     Vertex {
                         pos: rotate(vec2(-w + offset.x, -h + offset.y), pos, rotation),
@@ -177,7 +216,6 @@ pub(crate) fn draw(
                     },
                 ],
                 vec![0, 1, 3, 1, 2, 3],
-                Some(t.id),
             );
         }
     }
@@ -200,9 +238,11 @@ fn rotate(p: Vec2, center: Vec2, rotation: f32) -> Vec3 {
 }
 
 #[inline(always)]
-fn render(mut vert: Vec<Vertex>, mut indi: Vec<u16>, img: Option<usize>) {
+fn render(id: usize, mut vert: Vec<Vertex>, mut indi: Vec<u16>) {
     unsafe {
-        let needs_new_batch = match RENDERS.last() {
+        RENDERS[id].0 = vert;
+        RENDERS[id].1 = indi;
+        /*let needs_new_batch = match RENDERS.last() {
             Some((_, _, last_img)) => *last_img != img,
             None => true,
         };
@@ -220,7 +260,22 @@ fn render(mut vert: Vec<Vertex>, mut indi: Vec<u16>, img: Option<usize>) {
 
             last.0.extend(vert);
             last.1.extend(indi);
-        }
+        }*/
+    }
+}
+
+#[inline(always)]
+pub(crate) fn new_render() -> usize {
+    unsafe {
+        RENDERS.push((vec![], vec![], None, DrawUpdate::Create));
+        RENDERS.len() - 1
+    }
+}
+
+#[inline(always)]
+pub(crate) fn del_render(id: usize) {
+    unsafe {
+        RENDERS[id] = (vec![], vec![], None, DrawUpdate::Create);
     }
 }
 
@@ -244,10 +299,10 @@ pub(crate) fn upd_proj() {
                 MOUSE_PROJ = vec2(canvas.x / window.x, scale / window.y);
                 CANVAS_PROJ = vec2(canvas.x, scale);
                 Mat4::orthographic_rh_gl(
-                    -canvas.x + CAMERA2d.x,
-                    canvas.x + CAMERA2d.x,
-                    scale + CAMERA2d.y,
-                    -scale + CAMERA2d.y,
+                    -canvas.x + CAMERA2D.x,
+                    canvas.x + CAMERA2D.x,
+                    scale + CAMERA2D.y,
+                    -scale + CAMERA2D.y,
                     -1.0,
                     1.0,
                 )
@@ -257,10 +312,10 @@ pub(crate) fn upd_proj() {
                 MOUSE_PROJ = vec2(scale / window.x, canvas.y / window.y);
                 CANVAS_PROJ = vec2(scale, canvas.y);
                 Mat4::orthographic_rh_gl(
-                    -scale + CAMERA2d.x,
-                    scale + CAMERA2d.x,
-                    canvas.y + CAMERA2d.y,
-                    -canvas.y + CAMERA2d.y,
+                    -scale + CAMERA2D.x,
+                    scale + CAMERA2D.x,
+                    canvas.y + CAMERA2D.y,
+                    -canvas.y + CAMERA2D.y,
                     -1.0,
                     1.0,
                 )
@@ -269,10 +324,10 @@ pub(crate) fn upd_proj() {
                 MOUSE_PROJ = vec2(canvas.x / window.x, canvas.y / window.y);
                 CANVAS_PROJ = vec2(canvas.x, canvas.y);
                 Mat4::orthographic_rh_gl(
-                    -canvas.x + CAMERA2d.x,
-                    canvas.x + CAMERA2d.x,
-                    canvas.y + CAMERA2d.y,
-                    -canvas.y + CAMERA2d.y,
+                    -canvas.x + CAMERA2D.x,
+                    canvas.x + CAMERA2D.x,
+                    canvas.y + CAMERA2D.y,
+                    -canvas.y + CAMERA2D.y,
                     -1.0,
                     1.0,
                 )
@@ -282,10 +337,10 @@ pub(crate) fn upd_proj() {
                 MOUSE_PROJ = vec2(ZOOM, ZOOM);
                 CANVAS_PROJ = vec2(window.x, window.y);
                 Mat4::orthographic_rh_gl(
-                    -window.x + CAMERA2d.x,
-                    window.x + CAMERA2d.x,
-                    window.y + CAMERA2d.y,
-                    -window.y + CAMERA2d.y,
+                    -window.x + CAMERA2D.x,
+                    window.x + CAMERA2D.x,
+                    window.y + CAMERA2D.y,
+                    -window.y + CAMERA2D.y,
                     -1.0,
                     1.0,
                 )

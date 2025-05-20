@@ -24,6 +24,7 @@ pub(super) static mut FPS_BUFFER: u16 = 0;
 pub(super) static mut LAST_FPS_TIME: f64 = 0.;
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub(crate) struct Vertex {
     pos: Vec3,
     color: [f32; 4],

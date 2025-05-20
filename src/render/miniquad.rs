@@ -1,19 +1,20 @@
 use super::{
-    d2::{upd_proj, CAMERA2d, CANVAS_UPDATE, MOUSE_PROJ, PROJ, RENDERS, UPD_RENDER_BUFFER},
-    DELTA, LAST_FPS_TIME, LAST_FRAME_TIME, TEXUTRES_BUFFER, TEXUTRES_UPDATE, WINDOW, WINDOW_UPDATE,
+    d2::{upd_proj, CAMERA2D, CANVAS_UPDATE, MOUSE_PROJ, PROJ, RENDERS},
+    DELTA, LAST_FPS_TIME, LAST_FRAME_TIME, TEXUTRES_BUFFER, TEXUTRES_UPDATE, WINDOW, WINDOW_UPDATE, Texture,
 };
 use crate::{
     engine::{
         draw, touch, update, BACKGRAUND, FULLSCREEN, HIGH_DPI, MOUSE, MOUSE_DELTA,
         MOUSE_WHEEL_DELTA, RESIZABLE,
     },
+    object::d2::DrawUpdate,
     info::DEVICE,
-    object::Touch,
+    object::Touch, render::Vertex,
 };
 
 use glam::{vec2, Vec2};
 use miniquad::{window::set_window_size, *};
-use std::vec;
+use std::{usize, vec};
 
 static mut TEXUTRES: Vec<Option<TextureId>> = Vec::new();
 
@@ -91,7 +92,9 @@ impl QuadRender {
 }
 impl EventHandler for QuadRender {
     fn update(&mut self) {
+        let u = std::time::Instant::now();
         update();
+        println!("update: {:?}", u.elapsed());
     }
 
     fn draw(&mut self) {
@@ -102,7 +105,9 @@ impl EventHandler for QuadRender {
             };
         };
 
+        let u = std::time::Instant::now();
         draw();
+        println!("vertex: {:?}", u.elapsed());
 
         unsafe {
             for i in &TEXUTRES_BUFFER {
@@ -121,55 +126,7 @@ impl EventHandler for QuadRender {
             TEXUTRES_UPDATE.clear();
         }
 
-        if unsafe { UPD_RENDER_BUFFER } {
-            unsafe { UPD_RENDER_BUFFER = false }
-            self.bindings.clear();
-
-            for i in unsafe { &RENDERS } {
-                let vertex_buffer = self.ctx.new_buffer(
-                    BufferType::VertexBuffer,
-                    BufferUsage::Dynamic,
-                    BufferSource::slice(&i.0),
-                );
-
-                let index_buffer = self.ctx.new_buffer(
-                    BufferType::IndexBuffer,
-                    BufferUsage::Dynamic,
-                    BufferSource::slice(&i.1),
-                );
-
-                let images = if let Some(id) = i.2 {
-                    unsafe {
-                        if let Some(tex) = TEXUTRES[id] {
-                            tex
-                        } else {
-                            self.white
-                        }
-                    }
-                } else {
-                    self.white
-                };
-
-                let bindings = Bindings {
-                    vertex_buffers: vec![vertex_buffer],
-                    index_buffer,
-                    images: vec![images],
-                };
-
-                self.bindings.push(bindings);
-            }
-        } else {
-            for i in unsafe { RENDERS.iter().enumerate() } {
-                self.ctx.buffer_update(
-                    self.bindings[i.0].vertex_buffers[0],
-                    BufferSource::slice(&i.1 .0),
-                );
-                self.ctx.buffer_update(
-                    self.bindings[i.0].index_buffer,
-                    BufferSource::slice(&i.1 .1),
-                );
-            }
-        }
+        let u = std::time::Instant::now();
 
         //self.ctx.clear(Some((backgraund.r, backgraund.g, backgraund.b, backgraund.a)), None, None);
         unsafe {
@@ -186,19 +143,111 @@ impl EventHandler for QuadRender {
             .apply_uniforms(UniformsSource::table(&shader::Uniforms {
                 mvp: unsafe { PROJ },
             }));
+        
+        let mut verts: Vec<Vertex> = vec![];
+        let mut indis: Vec<u16> = vec![];
+        let mut last_texture: Option<usize> = Some(usize::MAX);
+        let mut new_texture: Option<usize> = last_texture;
+        let mut last_new_render = DrawUpdate::None;
 
-        for i in unsafe { RENDERS.iter().enumerate() } {
-            self.ctx.apply_bindings(&self.bindings[i.0]);
-            self.ctx.draw(0, i.1 .1.len() as i32, 1);
+        let mut bind_num: usize = 0;
+        
+        for i in unsafe { RENDERS.iter_mut().enumerate() } {
+            last_new_render = if i.1.3 == DrawUpdate::Create || last_new_render == DrawUpdate::Create {
+                DrawUpdate::Create
+            } else if i.1.3 == DrawUpdate::Update || last_new_render == DrawUpdate::Update {
+                DrawUpdate::Update
+            } else {
+                DrawUpdate::None
+            };
+            i.1.3 = DrawUpdate::None;
+
+            new_texture = i.1.2.clone();
+
+            if (new_texture != last_texture && unsafe { i.0 != 0 }) || i.0 == unsafe { RENDERS.len() - 1 } {
+                if last_new_render == DrawUpdate::Create {
+                    let vertex_buffer = self.ctx.new_buffer(
+                        BufferType::VertexBuffer,
+                        BufferUsage::Dynamic,
+                        BufferSource::slice(&verts),
+                    );
+
+                    let index_buffer = self.ctx.new_buffer(
+                        BufferType::IndexBuffer,
+                        BufferUsage::Dynamic,
+                        BufferSource::slice(&indis),
+                    );
+
+                    let images = if let Some(id) = last_texture {
+                        unsafe {
+                            if let Some(tex) = TEXUTRES[id] {
+                                tex
+                            } else {
+                                self.white
+                            }
+                        }
+                    } else {
+                        self.white
+                    };
+
+                    let bindings = Bindings {
+                        vertex_buffers: vec![vertex_buffer],
+                        index_buffer,
+                        images: vec![images],
+                    };
+
+                    self.bindings.push(bindings);
+                } else if last_new_render == DrawUpdate::Update {
+                    self.ctx.buffer_update(
+                        self.bindings[bind_num].vertex_buffers[0],
+                        BufferSource::slice(&verts),
+                    );
+                    self.ctx.buffer_update(
+                        self.bindings[bind_num].index_buffer,
+                        BufferSource::slice(&indis),
+                    );
+                }
+
+                self.ctx.apply_bindings(&self.bindings[bind_num]);
+                self.ctx.draw(0, indis.len() as i32, 1);
+
+                bind_num += 1;
+
+                last_new_render = DrawUpdate::None;
+
+                verts.clear();
+                indis.clear();
+            }
+
+            if new_texture != last_texture {
+                verts = i.1.0.clone();
+                indis = i.1.1.clone();
+
+                last_texture = new_texture;
+            } else {
+                let base_index = verts.len() as u16;
+                let vert: Vec<Vertex> = i.1.0.clone();
+                let mut indi = i.1.1.clone();
+
+                // Смещаем индексы на количество уже имеющихся вершин
+                for index in &mut indi {
+                    *index += base_index;
+                }
+
+                verts.extend(vert);
+                indis.extend(indi);
+            }
         }
 
         self.ctx.end_render_pass();
 
         self.ctx.commit_frame();
+        println!("frame: {:?}", u.elapsed());
 
         unsafe {
             DELTA = (date::now() - LAST_FRAME_TIME) as f32;
             LAST_FRAME_TIME = date::now();
+            println!("fps: {}", 1. / DELTA);
         }
     }
 
@@ -306,7 +355,7 @@ pub(crate) fn render(name: &str) {
 #[inline(always)]
 fn get_mouse_proj(x: f32, y: f32) -> Vec2 {
     //y - half_window.y) * get_mouse_proj().y - get_camera().y,
-    unsafe { (vec2(x, y) - WINDOW / 2.) * MOUSE_PROJ + CAMERA2d }
+    unsafe { (vec2(x, y) - WINDOW / 2.) * MOUSE_PROJ + CAMERA2D }
 }
 
 mod shader {

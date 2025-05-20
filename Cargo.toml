@@ -13,7 +13,7 @@ authors = ["Argus"]
 
 [[bin]]
 name = "test"
-path = "test/test.rs"
+path = "test/test2.rs"
 
 [dependencies]
 # inventory = "0.3"
