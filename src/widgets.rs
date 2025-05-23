@@ -42,7 +42,7 @@ pub fn button(name: &str, tex: &str, size: f32, font: &Font) -> Node2d {
     rect(&name, size.x + size.y, size.y * 2., size.x.min(size.y) / 4.)
         .color(Rgba::new(0.1, 0.1, 0.1, 1.))
         .node(vec![tex])
-        .script(&Button)
+        .script(Button)
         .hash("button", false)
         .get_node()
 }
@@ -89,7 +89,7 @@ pub fn check(name: &str, size: f32) -> Node2d {
     rect(&name, size * 2. + size2, size + size2, size2 + size / 4.)
         .color(Rgba::new(0.1, 0.1, 0.1, 1.))
         .node(vec![circle("button", size / 2.)])
-        .script(&Check)
+        .script(Check)
         .hash("check", false)
         .get_node() //.hash("posx", 0.)
 }

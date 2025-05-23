@@ -107,7 +107,7 @@ impl EventHandler for QuadRender {
 
         let u = std::time::Instant::now();
         draw();
-        println!("vertex: {:?}", u.elapsed().as_secs_f32());
+        println!("vertex: {:?}", u.elapsed());
 
         unsafe {
             for i in &TEXUTRES_BUFFER {

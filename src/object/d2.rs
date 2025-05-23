@@ -6,7 +6,7 @@ use crate::{prelude::{del_render, new_render}, render::{
 }};
 
 use glam::{vec2, Vec2};
-use std::{any::Any, collections::HashMap};
+use std::{any::Any, collections::HashMap, mem::take};
 
 pub(crate) static mut ON_TOUCH: bool = false;
 
@@ -71,7 +71,7 @@ pub struct Node2d {
     pub offset: Vec2,
     pub visible: bool,
     pub node: Vec<Node2d>,
-    pub script: Option<&'static dyn Module>,
+    pub script: Vec<Box<dyn Module>>,
     pub hash: HashMap<&'static str, Box<dyn Any + Send + Sync>>,
     touch_id: Option<u64>,
     render_id: usize,
@@ -135,9 +135,13 @@ impl Node2d {
 
 
     pub(crate) fn start(&mut self) {
-        if let Some(s) = self.script {
+        let mut scripts = take(&mut self.script);
+
+        for s in &mut scripts {
             s.start(self);
         }
+
+        self.script = scripts;
 
         for obj in &mut self.node {
             obj.start();
@@ -147,9 +151,13 @@ impl Node2d {
     pub(crate) fn update(&mut self) {
         self.upd_pos();
 
-        if let Some(s) = self.script {
+        let mut scripts = take(&mut self.script);
+
+        for s in &mut scripts {
             s.update(self, unsafe { DELTA });
         }
+
+        self.script = scripts;
 
         self.upd_pos();
 
@@ -331,7 +339,7 @@ impl Node2d {
         }
 
         if unsafe { ON_TOUCH } {
-            if let Some(s) = self.script {
+            if self.script.len() != 0 {
                 if match touch {
                     Touch::Press => {
                         let dx = pos.x - self.global_position.x;
@@ -385,7 +393,14 @@ impl Node2d {
                     unsafe {
                         ON_TOUCH = false;
                     }
-                    s.touch(self, id, touch, pos);
+
+                    let mut scripts = take(&mut self.script);
+
+                    for s in &mut scripts {
+                        s.touch(self, id, touch, pos);
+                    }
+
+                    self.script = scripts;
                 }
             }
         }
@@ -412,7 +427,7 @@ impl CreateNode2d {
                 keep: Keep::Canvas,
                 offset: Vec2::ZERO,
                 node: Vec::new(),
-                script: None,
+                script: Vec::new(),
                 hash: HashMap::new(),
                 touch_id: None,
                 render_id: 0,
@@ -445,8 +460,8 @@ impl CreateNode2d {
         self
     }
 
-    pub fn script(mut self, script: &'static dyn Module) -> Self {
-        self.node2d.script = Some(script);
+    pub fn script(mut self, script: impl Module) -> Self {
+        self.node2d.script.push(Box::new(script));
         self
     }
 
@@ -554,7 +569,7 @@ pub fn text(name: &str, text: &str, size: f32, font: &Font) -> CreateNode2d {
     )
 }
 
-pub trait Module {
+pub trait Module: Any {
     fn start(&self, _obj: &mut Node2d) {}
     fn update(&self, _obj: &mut Node2d, _d: f32) {}
     //fn key(&self, _obj: &mut Node2d, _key: &Key, _keymod: KeyMods, _touch: &Touch) {}
