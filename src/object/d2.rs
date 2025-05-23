@@ -1,5 +1,5 @@
 use super::{Keep, Touch};
-use crate::{prelude::new_render, render::{
+use crate::{prelude::{del_render, new_render}, render::{
     add_text,
     d2::{draw, CAMERA2D, CANVAS_PROJ, CANVAS_UPDATE, RENDERS},
     rgb, Font, Rgba, Texture, DELTA,
@@ -35,7 +35,7 @@ impl Obj2d {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum DrawUpdate {
     None,
     Update,
@@ -44,11 +44,15 @@ pub(crate) enum DrawUpdate {
 
 struct Chache {
     offset: Vec2,
+    visible: bool,
 }
 
 struct Hidden {
     obj: Obj2d,
+    parrent_position: Vec2,
+    global_position: Vec2,
     position: Vec2,
+    rotation: f32,
     scale: Vec2,
     offset: Vec2,
     visible: bool,
@@ -76,7 +80,6 @@ pub struct Node2d {
     hidden: Hidden,
 }
 impl Node2d {
-
     pub fn get_node(&mut self, name: &str) -> Option<&mut Node2d> {
         let name = name.to_string();
         for obj in &mut self.node {
@@ -106,7 +109,7 @@ impl Node2d {
     }
 
     pub fn add_node(&mut self, node: Vec<CreateNode2d>) {
-        let mut node: Vec<Node2d> = node.into_iter().map(|n| {
+        let node: Vec<Node2d> = node.into_iter().map(|n| {
             let mut n = n.get_node();
             if n.visible {
                 n.render_id = new_render();
@@ -167,11 +170,20 @@ impl Node2d {
                 Obj2d::None => vec2(0., 0.),
             };
 
-            self.draw_update = DrawUpdate::Update;
-            self.upd_img();
-        }
+            if self.visible {
+                self.draw_update = DrawUpdate::Update;
+                self.upd_img();
+            }
+        } 
 
         let parrent_pos = self.global_position + self.chache.offset / 2.;
+
+        if self.visible {
+            if self.rotation != self.hidden.rotation {
+                self.hidden.rotation = self.rotation;
+                self.draw_update = DrawUpdate::Update;
+            }
+        }
 
         for obj in &mut self.node {
             obj.parent_position = parrent_pos;
@@ -182,48 +194,69 @@ impl Node2d {
     pub(crate) fn draw(&mut self, a: f32) {
         if self.visible != self.hidden.visible && self.obj != Obj2d::None {
             self.hidden.visible = self.visible;
-            self.upd_img();
-        }
-
-        if self.visible {
-            let mut color = self.color.get();
-            color[3] *= a;
-
-            if self.draw_update != DrawUpdate::None {
-                draw(
-                    self.render_id,
-                    self.global_position,
-                    &self.obj,
-                    self.scale,
-                    self.rotation,
-                    self.offset,
-                    color,
-                );
-            }
-
-            unsafe {
-                if RENDERS[self.render_id].3 != DrawUpdate::Create {
-                    RENDERS[self.render_id].3 = self.draw_update;
+            if self.visible {
+                unsafe {
+                    RENDERS[self.render_id] = Some((vec![], vec![], None, DrawUpdate::Create));
+                }
+                self.upd_img();
+            } else {
+                unsafe {
+                    RENDERS[self.render_id] = None;
                 }
             }
+        }
 
-            self.draw_update = DrawUpdate::None;
+        if self.visible && self.chache.visible {
+            {
+                let mut color = self.color.get();
+                color[3] *= a;
 
-            for obj in &mut self.node {
-                obj.draw(color[3]);
+                if self.draw_update != DrawUpdate::None {
+                    draw(
+                        self.render_id,
+                        self.global_position,
+                        &self.obj,
+                        self.scale,
+                        self.rotation,
+                        self.offset,
+                        color,
+                    );
+                }
+
+                unsafe {
+                    if RENDERS[self.render_id].as_mut().unwrap().3 != DrawUpdate::Create {
+                        RENDERS[self.render_id].as_mut().unwrap().3 = self.draw_update;
+                    }
+                }
+
+                self.draw_update = DrawUpdate::None;
+
+                for obj in &mut self.node {
+                    obj.draw(color[3]);
+                }
             }
         }
     }
 
     #[inline(always)]
     fn upd_pos(&mut self) {
-        if self.global_position != self.hidden.position {
+        let c = if self.global_position != self.hidden.global_position {
             self.position = self.global_position - self.parent_position;
-            self.draw_update = DrawUpdate::Update;
-        }
+            true
+        } else if self.position != self.hidden.position {
+            true
+        } else if self.parent_position != self.hidden.parrent_position {
+            true
+        } else if unsafe { CANVAS_UPDATE } {
+            true
+        } else {
+            false
+        };
 
-        self.global_position = unsafe {
-            match self.keep {
+        if c {
+            self.draw_update = DrawUpdate::Update;
+
+            self.global_position = unsafe { match self.keep {
                 Keep::Canvas => self.parent_position,
                 Keep::Center => CAMERA2D,
                 Keep::Up => CAMERA2D + vec2(0., -CANVAS_PROJ.y),
@@ -236,25 +269,46 @@ impl Node2d {
                 Keep::RightDown => CAMERA2D + CANVAS_PROJ,
             } } + self.position;
         
-        self.hidden.position = self.global_position;
+            self.hidden.parrent_position = self.parent_position;
+            self.hidden.global_position = self.global_position;
+            self.hidden.position = self.position;
+
+            if self.visible {
+                self.upd_vsbl();
+            }
+        }
     }
 
     #[inline(always)]
     fn upd_img(&mut self) {
-        if self.visible {
-            let c = match &self.obj {
-                Obj2d::Rect(_, _, _) => None,
-                Obj2d::Circle(_) => None,
-                Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => Some(t.id),
-                Obj2d::None => None,
-            };
+        let c = match &self.obj {
+            Obj2d::Rect(_, _, _) => None,
+            Obj2d::Circle(_) => None,
+            Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => Some(t.id),
+            Obj2d::None => None,
+        };
 
-            unsafe {
-                if c != RENDERS[self.render_id].2 {
-                    RENDERS[self.render_id].2 = c;
-                }
+        unsafe {
+            if c != RENDERS[self.render_id].as_mut().unwrap().2 {
+                RENDERS[self.render_id].as_mut().unwrap().2 = c;
             }
         }
+
+        self.upd_vsbl();
+    }
+
+    #[inline(always)]
+    fn upd_vsbl(&mut self) {
+        let obj_povi = match &self.obj {
+            Obj2d::Rect(w, h, _) => (w.powi(2) + h.powi(2)).sqrt(),
+            Obj2d::Circle(r) => (r.powi(2) + r.powi(2)).sqrt(),
+            Obj2d::Texture(t) | Obj2d::Text(_, _, _, t) => (t.width.powi(2) + t.height.powi(2)).sqrt(),
+            Obj2d::None => 0.,
+        } / 2.;
+
+        let d = (self.position - unsafe { CAMERA2D }).abs() - obj_povi;
+
+        self.chache.visible = d.x < unsafe { CANVAS_PROJ.x } && d.y < unsafe { CANVAS_PROJ.y };
     }
 
     /*pub(crate) fn key(&mut self, key: &Key, keymod: KeyMods, touch: &Touch) {
@@ -365,13 +419,17 @@ impl CreateNode2d {
                 draw_update: DrawUpdate::Create,
                 chache: Chache {
                     offset: Vec2::ZERO,
+                    visible: true,
                 },
                 hidden: Hidden {
                     obj,
+                    parrent_position: Vec2::ZERO,
+                    global_position: Vec2::ZERO,
                     position: Vec2::ZERO,
+                    rotation: 0.,
                     scale: Vec2::ZERO,
                     offset: Vec2::ZERO,
-                    visible: true,
+                    visible: false,
                 },
             },
         }
@@ -439,6 +497,7 @@ pub fn circle(name: &str, r: f32) -> CreateNode2d {
 
 #[inline(always)]
 pub fn rect(name: &str, w: f32, h: f32, r: f32) -> CreateNode2d {
+    let r = r.min((w / 2.).min(h / 2.));
     CreateNode2d::new(name, Obj2d::Rect(w, h, r))
 }
 
@@ -460,7 +519,7 @@ pub fn line(
     let center_x = (x1 + x2) / 2.0;
     let center_y = (y1 + y2) / 2.0;
 
-    CreateNode2d::new(name, Obj2d::Rect(length, thickness, r))
+    rect(name, length, thickness, r)
         .position(center_x, center_y)
         .rotation(angle)
 }

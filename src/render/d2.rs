@@ -4,7 +4,7 @@ use crate::object::d2::{Obj2d, DrawUpdate};
 use glam::{vec2, vec3, Mat4, Vec2, Vec3};
 use std::f32::consts::TAU;
 
-pub(crate) static mut RENDERS: Vec<(Vec<Vertex>, Vec<u16>, Option<usize>, DrawUpdate)> = Vec::new();
+pub(crate) static mut RENDERS: Vec<Option<(Vec<Vertex>, Vec<u16>, Option<usize>, DrawUpdate)>> = Vec::new();
 
 pub(super) static mut PROJ: Mat4 = Mat4::IDENTITY;
 pub(crate) static mut MOUSE_PROJ: Vec2 = Vec2::ZERO;
@@ -240,8 +240,8 @@ fn rotate(p: Vec2, center: Vec2, rotation: f32) -> Vec3 {
 #[inline(always)]
 fn render(id: usize, mut vert: Vec<Vertex>, mut indi: Vec<u16>) {
     unsafe {
-        RENDERS[id].0 = vert;
-        RENDERS[id].1 = indi;
+        RENDERS[id].as_mut().unwrap().0 = vert;
+        RENDERS[id].as_mut().unwrap().1 = indi;
         /*let needs_new_batch = match RENDERS.last() {
             Some((_, _, last_img)) => *last_img != img,
             None => true,
@@ -267,7 +267,7 @@ fn render(id: usize, mut vert: Vec<Vertex>, mut indi: Vec<u16>) {
 #[inline(always)]
 pub(crate) fn new_render() -> usize {
     unsafe {
-        RENDERS.push((vec![], vec![], None, DrawUpdate::Create));
+        RENDERS.push(Some((vec![], vec![], None, DrawUpdate::Create)));
         RENDERS.len() - 1
     }
 }
@@ -275,7 +275,7 @@ pub(crate) fn new_render() -> usize {
 #[inline(always)]
 pub(crate) fn del_render(id: usize) {
     unsafe {
-        RENDERS[id] = (vec![], vec![], None, DrawUpdate::Create);
+        RENDERS[id] = None;
     }
 }
 

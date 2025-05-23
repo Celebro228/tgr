@@ -107,7 +107,7 @@ impl EventHandler for QuadRender {
 
         let u = std::time::Instant::now();
         draw();
-        println!("vertex: {:?}", u.elapsed());
+        println!("vertex: {:?}", u.elapsed().as_secs_f32());
 
         unsafe {
             for i in &TEXUTRES_BUFFER {
@@ -153,18 +153,24 @@ impl EventHandler for QuadRender {
         let mut bind_num: usize = 0;
         
         for i in unsafe { RENDERS.iter_mut().enumerate() } {
-            last_new_render = if i.1.3 == DrawUpdate::Create || last_new_render == DrawUpdate::Create {
+            if let None = i.1 {
+                continue;
+            }
+
+            let obj = i.1.as_mut().unwrap();
+
+            last_new_render = if obj.3 == DrawUpdate::Create || last_new_render == DrawUpdate::Create {
                 DrawUpdate::Create
-            } else if i.1.3 == DrawUpdate::Update || last_new_render == DrawUpdate::Update {
+            } else if obj.3 == DrawUpdate::Update || last_new_render == DrawUpdate::Update {
                 DrawUpdate::Update
             } else {
                 DrawUpdate::None
             };
-            i.1.3 = DrawUpdate::None;
+            obj.3 = DrawUpdate::None;
 
-            new_texture = i.1.2.clone();
+            new_texture = obj.2.clone();
 
-            if (new_texture != last_texture && unsafe { i.0 != 0 }) || i.0 == unsafe { RENDERS.len() - 1 } {
+            if (new_texture != last_texture && i.0 != 0 ) || i.0 == unsafe { RENDERS.len() - 1 } {
                 if last_new_render == DrawUpdate::Create {
                     let vertex_buffer = self.ctx.new_buffer(
                         BufferType::VertexBuffer,
@@ -214,20 +220,17 @@ impl EventHandler for QuadRender {
                 bind_num += 1;
 
                 last_new_render = DrawUpdate::None;
-
-                verts.clear();
-                indis.clear();
             }
 
-            if new_texture != last_texture {
-                verts = i.1.0.clone();
-                indis = i.1.1.clone();
+            if new_texture != last_texture || i.0 == unsafe { RENDERS.len() - 1 } || i.0 == 0 {
+                verts = obj.0.clone();
+                indis = obj.1.clone();
 
                 last_texture = new_texture;
             } else {
                 let base_index = verts.len() as u16;
-                let vert: Vec<Vertex> = i.1.0.clone();
-                let mut indi = i.1.1.clone();
+                let vert: Vec<Vertex> = obj.0.clone();
+                let mut indi = obj.1.clone();
 
                 // Смещаем индексы на количество уже имеющихся вершин
                 for index in &mut indi {
@@ -270,7 +273,6 @@ impl EventHandler for QuadRender {
     }
 
     fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
-        println!("{}", get_mouse_proj(x, y));
         touch(
             match button {
                 MouseButton::Left => 0,

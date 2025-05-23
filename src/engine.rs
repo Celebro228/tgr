@@ -93,7 +93,7 @@ impl Engine {
     pub fn node2d(self, node: CreateNode2d) -> Self {
         unsafe {
             NODE2D = Some(node.get_node());
-            RENDERS.clear();
+            //RENDERS.clear();
 
             if let Some(node) = &mut NODE2D {
                 node.start();
